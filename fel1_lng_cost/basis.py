@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import date
 
 from . import factors as F
+from . import opci_link
 
 
 @dataclass
@@ -74,7 +75,7 @@ class EstimateBasis:
     location_group: str = "usa"
     location_steps: int = 0
     location_factor: float | None = None  # overrides group and steps
-    estimate_year: int = 2026
+    estimate_date: str | None = None  # '2029Q4'; None = latest published OPCI quarter
     report_currency: str = "USD"
     report_fx: float = 1.0  # local currency units per USD
     feed_gas: str = "lean"
@@ -101,14 +102,13 @@ class EstimateBasis:
     hybrid_step_share: float = F.STORAGE_MARINE_SHARE_OF_EPC
 
     # ------------------------------------------------ Step 4: escalation
-    escalation_mode: str = "auto"  # auto | constant | index | damped | two_cases
-    escalation_rate: float = F.DEFAULT_ESCALATION_RATE
-    escalation_rate_low: float = 0.02
-    cost_index: dict[int, float] | None = None
+    escalation_mode: str = "auto"  # auto | opci | user_index | constant
+    opci_release: str | None = None  # None = latest data release; a name freezes it
+    projection_inflation: float | None = None  # None = default (OPCI when held, else stopgap)
+    projection_real: tuple[float, float, float] | None = None  # low, mid, high; None = default
+    escalation_rate: float = F.DEFAULT_ESCALATION_RATE  # constant-rate sensitivity
+    cost_index: dict[int, float] | None = None  # user index: replaces OPCI when loaded
     index_name: str = "CEPCI"
-    damping_f: float = F.DEFAULT_DAMPING_F
-    two_case_high: str = "index"  # index | damped | constant | constant_low
-    two_case_low: str = "damped"
 
     # ------------------------------------------------ Step 5: location
     location_method: str = "full"  # full | construction_share
@@ -181,6 +181,28 @@ class EstimateBasis:
             return self.exponent
         return F.DEFAULT_EXPONENTS.get(self.facility_type, 0.7)
 
+    def resolved_estimate_date(self) -> str:
+        if self.estimate_date is None:
+            return opci_link.latest_quarter(self.opci_release)
+        return opci_link.parse_period(self.estimate_date)
+
+    @property
+    def estimate_year(self) -> int:
+        return int(self.resolved_estimate_date()[:4])
+
+    def projection_rates(self) -> dict:
+        """Inflation and real escalation (low, mid, high), each with its source."""
+        d = opci_link.projection_defaults()
+        infl = self.projection_inflation
+        real = self.projection_real
+        return {
+            "inflation": d["inflation"] if infl is None else infl,
+            "inflation_source": d["source"] if infl is None else "user",
+            "real": tuple(d["real"] if real is None else real),
+            "real_source": d["source"] if real is None else "user",
+            "note": d["note"],
+        }
+
     def target_location_factor(self) -> float:
         if self.location_factor is not None:
             return self.location_factor
@@ -219,7 +241,8 @@ def make_basis(facility_type: str = F.LIQUEFACTION, **changes) -> EstimateBasis:
 
 
 # ---------------------------------------------------------------- switch registry
-REQUIRED_INPUTS = {"purpose", "facility_type", "train_size_mtpa", "trains", "site_type", "location_group"}
+REQUIRED_INPUTS = {"purpose", "facility_type", "train_size_mtpa", "trains", "site_type", "location_group",
+                   "estimate_date"}
 
 # (key, step, label, source of default)
 SWITCHES = [
@@ -231,7 +254,7 @@ SWITCHES = [
     ("location_group", 1, "Location group", "Required input; OIES groups"),
     ("location_steps", 1, "Location steps of 0.10", "Guideline step rule"),
     ("location_factor", 1, "Location factor override", "None"),
-    ("estimate_year", 1, "Estimate year", "Current year"),
+    ("estimate_date", 1, "Estimate date (quarter)", "Latest published OPCI quarter"),
     ("feed_gas", 1, "Feed gas", "Lean"),
     ("co2_sequestration", 1, "CO2 sequestration at target", "No"),
     ("process_family", 1, "Process family", "Not yet chosen"),
@@ -250,13 +273,13 @@ SWITCHES = [
     ("exclude_ids", 2, "Analogs excluded by the user", "None"),
     ("adjustment_method", 3, "Adjustment method", "Multiply at Class 5"),
     ("hybrid_step_share", 3, "Hybrid: storage and marine share removed from analogs", F.JUDGMENT),
-    ("escalation_mode", 4, "Escalation method", "Two cases if an index is loaded, else 3%"),
-    ("escalation_rate", 4, "Constant escalation rate", F.JUDGMENT),
-    ("escalation_rate_low", 4, "Low constant rate (two cases)", F.JUDGMENT),
-    ("index_name", 4, "Cost index", "CEPCI (user loads values)"),
-    ("damping_f", 4, "Damping fraction f", "Guideline test case"),
-    ("two_case_high", 4, "High escalation case", F.GUIDE),
-    ("two_case_low", 4, "Low escalation case", F.GUIDE),
+    ("escalation_mode", 4, "Escalation method", "OPCI, single case; a loaded user index replaces it"),
+    ("opci_release", 4, "OPCI data release (freeze switch)", "Latest data release"),
+    ("projection_inflation", 4, "Projection: inflation a year", "OPCI when it holds the data; stopgap 2.5%"),
+    ("projection_real", 4, "Projection: real escalation a year (low, mid, high)",
+     "OPCI when it holds the data; stopgap 0%, +1.5%, +3.5%"),
+    ("escalation_rate", 4, "Constant escalation rate (sensitivity)", F.JUDGMENT),
+    ("index_name", 4, "User index name", "Used only when a user index is loaded"),
     ("location_method", 5, "Location method", F.OIES),
     ("construction_share", 5, "Construction share (split method)", F.OIES),
     ("location_groups", 5, "Location group factors", F.OIES),
@@ -308,6 +331,15 @@ def decision_log(basis: EstimateBasis) -> list[dict]:
         dflt = "No default" if required else getattr(default, key)
         if key == "exponent":
             setting, dflt = basis.resolved_exponent(), default.resolved_exponent()
+        if key == "opci_release":
+            dflt = "Latest"
+            setting = basis.opci_release or "Latest"
+        if key == "estimate_date":
+            dflt = "Latest published quarter"
+            setting = basis.estimate_date or dflt
+        if key in ("projection_inflation", "projection_real"):
+            dflt = "Default (stopgap)"
+            setting = dflt if setting is None else setting
         changed = (not required) and setting != dflt
         reason = basis.reasons.get(key) or basis.reasons.get(f"step:{step}") or ""
         if not reason:

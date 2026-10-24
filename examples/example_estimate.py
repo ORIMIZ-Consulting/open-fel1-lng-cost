@@ -27,7 +27,7 @@ greenfield = make_basis(
     target_region="Southeast Asia",
     location_group="remote",   # OIES remote group, 1.30
     location_steps=-1,         # one step down: established industrial LNG site
-    estimate_year=2026,
+    estimate_date="2026Q3",    # usually the expected FID date, for example "2029Q4"
     site_items=[
         # Analogs carry a typical jetty, so only the difference travels, as a risk.
         SiteItem("Long trestle", "marine", analogs_carry_typical=True,

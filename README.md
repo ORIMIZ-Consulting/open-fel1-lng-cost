@@ -4,7 +4,7 @@ Maintained by ORIMIZ Consulting.
 
 A free tool for a first capital cost estimate of a liquefied natural gas (LNG) liquefaction plant, at Front-End Loading 1 (FEL 1), the concept stage. It works from past projects with published costs, called **analogs**.
 
-The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.1](docs/GUIDELINE.md). The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
+The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.2](docs/GUIDELINE.md). Version 0.2 takes escalation and location from the [Open Plant Cost Index (OPCI)](https://github.com/ORIMIZ-Consulting/open-plant-cost-index). The code is being moved to version 0.2 one step at a time. Until that work is done, the step table below describes the tool as it runs today. The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
 
 > **Use with care.** The result is an Association for the Advancement of Cost Engineering (AACE) Class 5 estimate: good for screening ideas, comparing concepts and supporting a Gate 1 decision. It is not a budget, and it must not be used for an investment decision. The range is a set of reasoned bounds, not a statistical P10 and P90.
 
@@ -39,10 +39,10 @@ To use it from Python, see `examples/example_estimate.py`. It compares a greenfi
 
 | Step | What the tool does |
 |---|---|
-| 1. Key inputs | Purpose, capacity per train and train count, site type, location, date, feed gas, process family, battery limits, accuracy target. |
+| 1. Key inputs | Purpose, capacity per train and train count, site type, location, estimate date (a quarter, usually the expected FID date), feed gas, process family, battery limits, accuracy target. |
 | 2. Analog selection | Filters on facility type, train size band (0.5 to 2 times), final investment decision (FID) date (last 15 years), scope, site type, size cluster and process family. Every analog filtered out shows the reason. Warns below 5 analogs; stops below 3. |
 | 3. Adjustment method | Multiply (default), or hybrid: storage and marine are taken out of the analogs and added back as the target's own blocks. |
-| 4. Escalation | Constant rate, cost index, damped index, or two cases. With an index loaded, the default runs two cases: full index (high) and half the index change (low). Shows the calibration pairs that test the damping fraction. |
+| 4. Escalation | Open Plant Cost Index (OPCI), single case, from the latest data release or a frozen named release. A loaded user index replaces OPCI. A constant rate is shown as a sensitivity. The escalation band and the supply-shock note come from OPCI. Beyond the latest published OPCI quarter, the factor is split into published data and a labelled projection with low, mid and high cases. A reference line gives the cost at the latest published quarter. A calibration diagnostic is reported but does not change the estimate. |
 | 5. Location | Oxford Institute for Energy Studies (OIES) location groups (USA 1.00 to NW Australia 1.72), with steps of 0.10. Optionally applies the factor to the construction share only (32%). |
 | 6. Scope and complexity | Plant-only splits, owner's costs on engineering, procurement and construction (EPC) only figures, site type to greenfield, multi-train to one train, gas complexity (simple or graded), CO2 sequestration. |
 | 7. Size scaling | Unit cost × (target train ÷ analog train)^(n − 1), n = 0.7. Always shows n = 0.6 and 0.8. Reports a fitted n but does not use it unless you ask. Three methods for multi-train targets. |
@@ -89,7 +89,7 @@ Git ignores files that start with `private_`, so they never reach GitHub. A row 
 
 ## Loading a cost index
 
-The Chemical Engineering Plant Cost Index (CEPCI) and the S&P Global indices are copyrighted, so the tool cannot ship them. If you hold one, fill in `data/cost_index_template.csv` (columns `year` and `index`), save it as `private_cost_index.csv`, and load it in the Method switches tab, Step 4. The tool then runs the two default escalation cases.
+By default the tool escalates with OPCI, which installs with the tool. The Chemical Engineering Plant Cost Index (CEPCI) and the S&P Global indices are copyrighted, so the tool cannot ship them. If you hold one, fill in `data/cost_index_template.csv` (columns `year` and `index`), save it as `private_cost_index.csv`, and load it in the Method switches tab, Step 4. Your index then replaces OPCI, and the outputs say so.
 
 ## Files
 
@@ -101,10 +101,11 @@ The Chemical Engineering Plant Cost Index (CEPCI) and the S&P Global indices are
 | `fel1_lng_cost/estimate.py` | Steps 2 to 12 |
 | `fel1_lng_cost/export.py` | Excel workbook |
 | `fel1_lng_cost/charts.py` | Charts for the app |
+| `fel1_lng_cost/opci_link.py` | Open Plant Cost Index (OPCI) version and data release stamp |
 | `data/public_analogs.csv` | Public analogs with sources |
 | `data/analog_template.csv` | Blank row for your own analogs |
 | `data/cost_index_template.csv` | Blank cost index |
-| `docs/GUIDELINE.md` | The estimating guideline |
+| `docs/GUIDELINE.md` | The estimating guideline (version 0.2) |
 | `examples/example_estimate.py` | Greenfield against brownfield, in Python |
 | `tests/` | Automatic checks. Run `pytest` |
 
@@ -116,7 +117,7 @@ These come from the guideline (Section 19), plus a few of the tool's own.
 - Public figures rarely state their full scope. Read each source before using a number.
 - Most figures are announced at FID. Final costs are often higher.
 - OIES factors reflect 2014 to 2018 conditions and a limited project set.
-- The estimate date is a year, not a quarter.
+- Projection rates are a labelled stopgap (inflation 2.5%; real escalation 0%, +1.5%, +3.5%) until OPCI holds the data.
 - Probabilistic ranging (Step 12, option D) is for FEL 2 and is not built.
 - The tool sets no location factor of its own beyond the OIES groups and the step rule.
 

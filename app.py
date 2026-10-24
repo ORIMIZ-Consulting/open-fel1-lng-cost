@@ -13,6 +13,7 @@ from fel1_lng_cost import (
     SiteItem,
     compare_options,
     dredging_cost,
+    escalation_source,
     estimate,
     load_analogs,
     make_basis,
@@ -21,6 +22,7 @@ from fel1_lng_cost import (
 )
 from fel1_lng_cost import charts
 from fel1_lng_cost import factors as F
+from fel1_lng_cost import opci_link
 
 st.set_page_config(page_title="FEL1 LNG Cost", layout="wide")
 st.title("FEL1 LNG cost from analogs")
@@ -29,6 +31,7 @@ st.caption(
     "following the FEL 1 LNG Capital Cost Estimating Guideline v0.1. Every method choice is a "
     "switch, and every switch goes into the decision log."
 )
+index_line = st.empty()
 W = "stretch"
 
 
@@ -56,7 +59,15 @@ with st.sidebar:
                            "workforce; one step up for a first-of-its-kind remote site.")
     override = st.checkbox("Enter my own location factor")
     loc_factor = st.number_input("Location factor", 0.5, 3.0, 1.0, 0.05) if override else None
-    est_year = st.number_input("Estimate year", 2000, 2100, 2026, 1)
+    est_text = st.text_input("Estimate date (quarter)", opci_link.show_period(opci_link.latest_quarter()),
+                             placeholder="2029 Q4",
+                             help="The default is the latest published OPCI quarter.")
+    try:
+        est_date = opci_link.parse_period(est_text)
+    except ValueError as err:
+        st.error(str(err))
+        st.stop()
+    st.caption("Usually the expected FID date, for example 2029 Q4.")
     c1, c2 = st.columns(2)
     currency = c1.text_input("Report currency", "USD")
     fx = c2.number_input("Units per USD", 0.0001, 100000.0, 1.0)
@@ -119,21 +130,32 @@ with tab_sw:
         idx_file = st.file_uploader("Cost index CSV (columns: year, index)", type="csv", key=f"idx{k}",
                                     help="CEPCI or an upstream capital cost index. Copyrighted indices "
                                          "cannot ship with the tool; load your own values.")
-        idx_name = st.text_input("Index name", D.index_name, key=f"idxn{k}")
-        modes = ["auto", "constant", "index", "damped", "two_cases"]
+        idx_name = st.text_input("User index name", D.index_name, key=f"idxn{k}")
+        modes = ["auto", "opci", "user_index", "constant"]
         mode = st.selectbox("Method", modes, key=f"esc{k}", format_func={
-            "auto": "Default: two cases if an index is loaded, else constant rate",
-            "constant": "A. Constant rate", "index": "B/C. Cost index", "damped": "D. Damped index",
-            "two_cases": "E. Two cases of my choice"}.get)
-        c1, c2, c3 = st.columns(3)
-        rate = c1.number_input("Rate % per year", -5.0, 20.0, D.escalation_rate * 100, 0.5, key=f"rate{k}") / 100
-        rate_low = c2.number_input("Low rate % (two cases)", -5.0, 20.0, D.escalation_rate_low * 100, 0.5,
-                                   key=f"ratel{k}") / 100
-        damp = c3.number_input("Damping fraction f", 0.0, 1.5, D.damping_f, 0.05, key=f"damp{k}")
-        case_opts = ["index", "damped", "constant", "constant_low"]
-        c1, c2 = st.columns(2)
-        hi_case = c1.selectbox("High case", case_opts, 0, key=f"hic{k}")
-        lo_case = c2.selectbox("Low case", case_opts, 1, key=f"loc{k}")
+            "auto": "Default: OPCI, or my index if loaded",
+            "opci": "A. OPCI", "user_index": "B. User index (replaces OPCI)",
+            "constant": "C. Constant rate (sensitivity only)"}.get)
+        names = opci_link.releases()
+        freeze = st.checkbox("Freeze on a named OPCI data release", key=f"frz{k}",
+                             help="Off: the latest data release. On: a named release, so the "
+                                  "estimate can be reproduced exactly.")
+        release = st.selectbox("OPCI data release", names, len(names) - 1, key=f"rel{k}") if freeze else None
+        rate = st.number_input("Constant rate % per year (sensitivity)", -5.0, 20.0, D.escalation_rate * 100,
+                               0.5, key=f"rate{k}") / 100
+        dflt = opci_link.projection_defaults()
+        st.write(f"Projection beyond {opci_link.show_period(opci_link.latest_quarter(release))}: "
+                 "(1 + inflation + real escalation) a year. Default source: "
+                 f"{dflt['source']} ({dflt['note']}).")
+        c1, c2, c3, c4 = st.columns(4)
+        infl = c1.number_input("Inflation %", -5.0, 20.0, dflt["inflation"] * 100, 0.1, key=f"inf{k}") / 100
+        real = tuple(c.number_input(f"Real, {name} %", -10.0, 20.0, v * 100, 0.1, key=f"re{name}{k}") / 100
+                     for c, name, v in zip((c2, c3, c4), ("low", "mid", "high"), dflt["real"]))
+        proj_infl = None if infl == dflt["inflation"] else infl
+        proj_real = None if real == tuple(dflt["real"]) else real
+        bd = opci_link.band(release)
+        st.caption(f"Escalation band from the OPCI back-test: about +/-{bd['normal']:.1%}, and about "
+                   f"+/-{bd['shock']:.1%} when the analog or estimate date is in 2021 or 2022.")
         r = reason_box(4, f"r4{k}")
         if r:
             reasons["step:4"] = r
@@ -324,16 +346,16 @@ except ValueError as err:
 common = dict(
     purpose=purpose, train_size_mtpa=float(train), trains=int(trains), site_type=site_type,
     location_name=location_name, location_group=group, location_steps=int(steps), location_factor=loc_factor,
-    estimate_year=int(est_year), report_currency=currency, report_fx=float(fx), feed_gas=feed,
+    estimate_date=est_date, report_currency=currency, report_fx=float(fx), feed_gas=feed,
     co2_sequestration=co2, process_family=family, battery_limits=tuple(limits),
     class_low=float(class_low), class_high=float(class_high),
     train_band=tuple(band) if band else None, fid_window_years=int(fid_window) if fid_window else None,
     scopes=tuple(scopes), use_plant_splits=splits, site_types_allowed=tuple(sites_ok) or None,
     cluster_rule=cluster, process_family_filter=fam_filter, min_count_warn=int(min_warn),
     min_count_stop=int(min_stop), adjustment_method=adj, hybrid_step_share=float(hyb),
-    escalation_mode=mode, escalation_rate=float(rate), escalation_rate_low=float(rate_low),
-    cost_index=cost_index, index_name=idx_name, damping_f=float(damp), two_case_high=hi_case,
-    two_case_low=lo_case, location_method=loc_method, construction_share=float(share),
+    escalation_mode=mode, opci_release=release, escalation_rate=float(rate),
+    projection_inflation=proj_infl, projection_real=proj_real,
+    cost_index=cost_index, index_name=idx_name, location_method=loc_method, construction_share=float(share),
     location_groups=dict(zip(gtable["group"], gtable["factor"])), apply_owner_costs=own_on,
     owner_cost_factor=float(own_f), apply_site_factor=site_on,
     site_factors=dict(zip(stable["site_type"], stable["factor_to_greenfield"])),
@@ -393,6 +415,11 @@ weights = {r.id: int(r.your_weight) for r in edited.itertuples() if int(r.your_w
 w_reasons = {r.id: r.reason for r in edited.itertuples() if str(r.reason).strip()}
 drops = {r.id: (r.drop_reason or "No reason given") for r in edited.itertuples() if r.drop}
 basis = basis.with_changes(weights=weights, weight_reasons=w_reasons, drop_reasons=drops)
+try:
+    index_line.caption(f"Cost index: [Open Plant Cost Index]({opci_link.OPCI_URL}). "
+                       f"{escalation_source(basis)}")
+except ValueError as err:
+    index_line.error(str(err))
 
 try:
     res = estimate(df, basis)
@@ -420,7 +447,8 @@ if compare:
 with tab_res:
     fxv = basis.report_fx
     cur = basis.report_currency
-    st.subheader(f"{basis.trains} x {basis.train_size_mtpa:g} MTPA, {location_name}, money of {basis.estimate_year}")
+    st.subheader(f"{basis.trains} x {basis.train_size_mtpa:g} MTPA, {location_name}, "
+                 f"estimate date {opci_link.show_period(basis.resolved_estimate_date())}")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Low", f"{res.low * fxv:,.0f} {cur} m", f"{res.low / res.central - 1:+.0%}", delta_color="off")
     m2.metric("Base", f"{res.central * fxv:,.0f} {cur} m")
@@ -428,6 +456,8 @@ with tab_res:
     m4.metric("Unit cost", f"{res.unit_cost:,.0f} USD/tpa")
     st.caption(f"AACE Class 5. Base method: {res.base_method}. {res.base_reason} "
                "The range is a set of reasoned bounds, not a statistical P10 and P90.")
+    for line in res.escalation.get("lines", []):
+        st.caption(line)
     for w in res.warnings:
         st.warning(w)
 
@@ -461,7 +491,7 @@ with tab_res:
     if esc_fig:
         c2.plotly_chart(esc_fig, width=W)
     if len(res.calibration):
-        c2.write("Damping calibration pairs (Step 4):")
+        c2.write("Calibration diagnostic (Step 4, report only; it does not change the estimate):")
         c2.dataframe(res.calibration.round(3), hide_index=True, width=W)
 
     st.subheader("Cost blocks")
@@ -482,7 +512,7 @@ with tab_res:
                      column_config={"source": st.column_config.LinkColumn()})
     st.download_button(
         "Download Excel workbook", data=to_excel_bytes(res, comparison),
-        file_name=f"fel1_{ftype}_{basis.trains}x{basis.train_size_mtpa:g}_{basis.estimate_year}.xlsx",
+        file_name=f"fel1_{ftype}_{basis.trains}x{basis.train_size_mtpa:g}_{basis.resolved_estimate_date()}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 

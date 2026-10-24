@@ -1,9 +1,13 @@
 """Checks on the public analog set, the outputs and the app."""
+from io import BytesIO
 from pathlib import Path
 
+import opci
 import pytest
+from openpyxl import load_workbook
 
 from fel1_lng_cost import estimate, load_analogs, make_basis, to_excel_bytes
+from fel1_lng_cost import opci_link
 from fel1_lng_cost.analogs import check_analogs
 
 APP = Path(__file__).resolve().parent.parent / "app.py"
@@ -50,3 +54,15 @@ def test_app_runs():
     at = AppTest.from_file(str(APP), default_timeout=120).run()
     assert not at.exception
     assert len(at.metric) >= 4
+    assert any(opci_link.stamp_label() in c.value for c in at.caption)
+
+
+def test_opci_stamp_on_export():
+    label = opci_link.stamp_label()
+    assert label == f"OPCI {opci.__version__}, {opci_link.latest_release()}"
+    assert opci_link.latest_release().startswith("data-")
+    res = estimate(load_analogs(), make_basis(train_size_mtpa=5.0))
+    ws = load_workbook(BytesIO(to_excel_bytes(res)))["Summary"]
+    values = {ws.cell(row=i, column=1).value: ws.cell(row=i, column=2).value
+              for i in range(1, ws.max_row + 1)}
+    assert values["Cost index"] == label

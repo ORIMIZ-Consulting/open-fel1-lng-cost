@@ -103,8 +103,17 @@ BATTERY_LIMIT_ITEMS = {
 DEFAULT_BATTERY_LIMITS = ("trains", "utilities", "tanks", "marine", "site_works", "owners_costs")
 
 # ---------------------------------------------------------------- Step 4
-DEFAULT_ESCALATION_RATE = 0.03  # fallback only; judgment
-DEFAULT_DAMPING_F = 0.5  # guideline test case
+# Default: Open Plant Cost Index (OPCI), single case. Values, band and
+# supply-shock note come from OPCI (opci_link.py), not from this file.
+OPCI = "Haider (2026), Open Plant Cost Index (OPCI), DOI 10.5281/zenodo.23615226"
+OPCI_URL = "https://github.com/ORIMIZ-Consulting/open-plant-cost-index"
+DEFAULT_ESCALATION_RATE = 0.03  # constant-rate sensitivity only; judgment
+# Projection beyond the latest published OPCI quarter: (1 + inflation + real
+# escalation) per year. Stopgap until OPCI holds IMF inflation and its own real
+# escalation history (decision D4). Labelled "stopgap" in every output.
+STOPGAP_INFLATION = 0.025
+STOPGAP_REAL_ESCALATION = (0.0, 0.015, 0.035)  # low, mid, high
+STOPGAP_SOURCE = "Stopgap until OPCI holds the data (guideline Step 4, decision D4)"
 
 # ---------------------------------------------------------------- Step 5
 # Location factor groups, USA = 1.00. OIES Figure 5; "remote" from OIES text.
@@ -200,6 +209,7 @@ AACE_CLASSES = (
 
 # ---------------------------------------------------------------- references
 FACTOR_REFERENCES = [
+    ("Escalation index, band and supply-shock note", OPCI, OPCI_URL),
     ("Location groups (USA 1.00 to NW Australia 1.72)", OIES, OIES_URL),
     ("Cost type split (owner 10%, engineering 8%, equipment 30%, bulks 20%, construction 32%)", OIES, OIES_URL),
     ("Brownfield to greenfield x1.50", OIES, OIES_URL),

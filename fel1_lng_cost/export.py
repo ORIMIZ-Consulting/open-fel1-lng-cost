@@ -11,7 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import factors as F
-from .estimate import EstimateResult
+from .estimate import EstimateResult, escalation_source
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3A5F")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -94,8 +94,9 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         ("Total capacity (MTPA)", b.capacity_mtpa),
         ("Site type", b.site_type),
         ("Location", f"{b.location_name}, factor {b.target_location_factor():.2f}"),
-        ("Money of year", b.estimate_year),
+        ("Estimate date", b.resolved_estimate_date().replace("Q", " Q")),
         ("Currency", b.report_currency),
+        ("Cost index", escalation_source(b)),
         (None, None),
         (f"Low ({b.report_currency} million)", round(r.low * fx)),
         (f"Base ({b.report_currency} million)", round(r.central * fx)),
@@ -116,6 +117,13 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
             ws.cell(row=row, column=1, value=label).font = BOLD
             ws.cell(row=row, column=2, value=value)
         row += 1
+    row += 1
+    ws.cell(row=row, column=1, value="Escalation (Step 4)").font = BOLD
+    for line in r.escalation.get("lines", []):
+        row += 1
+        ws.cell(row=row, column=1, value=line).alignment = Alignment(wrap_text=True)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+    row += 1
     if r.warnings:
         row += 1
         ws.cell(row=row, column=1, value="Warnings").font = BOLD
@@ -180,7 +188,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         we.add_chart(bc, f"E{start}")
     if len(r.calibration):
         start = we.max_row + 3
-        we.cell(row=start - 1, column=1, value="Damping calibration pairs").font = BOLD
+        we.cell(row=start - 1, column=1, value="Calibration diagnostic (report only)").font = BOLD
         _table(we, r.calibration, start_row=start, widths={"earlier": 36, "later": 36})
 
     # ---------------------------------------------------------- Size curve

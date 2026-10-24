@@ -4,7 +4,7 @@ Each analog's unit cost (USD per tonne per annum, "USD/tpa") travels through
 the steps one factor at a time. The journey table records the value after
 every step, so a reviewer can check any number by hand.
 
-    Step 4  escalate     u x f_esc               f_esc from rate, index or damped index
+    Step 4  escalate     u x f_esc               f_esc from OPCI (or a user index), single case
     Step 5  relocate     u x f_loc               f_loc = target factor / analog factor
     Step 6  scope        u x f_split x f_owner x f_site x f_multi x f_gas + co2
     Step 7  size         u x (T_target / T_analog) ^ (n - 1)  x  multi-train target factor
@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 from . import factors as F
+from . import opci_link
 from .basis import EstimateBasis, Method, SiteItem, decision_log
 
 
@@ -45,6 +46,7 @@ def weighted_quantile(values, weights, q: float) -> float:
 
 
 def _index_value(year: int, b: EstimateBasis, notes: list[str]) -> float:
+    year = int(str(year)[:4])  # a user index is by year
     idx = b.cost_index
     if year in idx:
         return idx[year]
@@ -56,47 +58,101 @@ def _index_value(year: int, b: EstimateBasis, notes: list[str]) -> float:
     return idx[nearest] * (1 + b.escalation_rate) ** (year - nearest)
 
 
-def escalation_factor(from_year: int, to_year: int, how: str, b: EstimateBasis,
-                      notes: list[str] | None = None) -> float:
-    """Factor that moves a cost from one year's money to another's (Step 4).
+def _opci_value(period, b: EstimateBasis, notes: list[str]) -> float:
+    row = opci_link.value(period, b.opci_release)
+    if row is None:
+        release = opci_link.resolve(b.opci_release)
+        raise ValueError(
+            f"OPCI {release} has no value for {period}; its data run from "
+            f"{opci_link.first_year(b.opci_release)} to "
+            f"{opci_link.show_period(opci_link.latest_quarter(b.opci_release))}."
+        )
+    if row["part"]:
+        notes.append(f"OPCI {period} is a part period (data to {opci_link.meta(b.opci_release)['data_to']}).")
+    return row["value"]
 
-    how: constant, constant_low, index, damped, or none.
+
+def _decimal_year(period) -> float:
+    """Middle of a year ('2015' -> 2015.5) or of a quarter ('2015Q1' -> 2015.125)."""
+    p = str(period)
+    return int(p[:4]) + ((int(p[5]) - 0.5) / 4 if "Q" in p else 0.5)
+
+
+def escalation_factor(from_date, to_date, how: str, b: EstimateBasis,
+                      notes: list[str] | None = None) -> float:
+    """Factor that moves a cost from one date's money to another's (Step 4).
+
+    Dates are years (2015) or quarters ('2029Q4'). For OPCI this is published
+    data only; see ``projection`` for the part beyond it.
+    how: opci (default), index (user index), constant, or none.
     """
     notes = notes if notes is not None else []
     if how == "none":
         return 1.0
+    if how == "opci":
+        return _opci_value(to_date, b, notes) / _opci_value(from_date, b, notes)
     if how == "constant":
-        return (1 + b.escalation_rate) ** (to_year - from_year)
-    if how == "constant_low":
-        return (1 + b.escalation_rate_low) ** (to_year - from_year)
-    if how in ("index", "damped"):
+        return (1 + b.escalation_rate) ** (_decimal_year(to_date) - _decimal_year(from_date))
+    if how == "index":
         if not b.cost_index:
-            raise ValueError("This escalation method needs a cost index. Load one or choose a constant rate.")
-        ratio = _index_value(to_year, b, notes) / _index_value(from_year, b, notes)
-        if how == "index":
-            return ratio
-        return 1 + b.damping_f * (ratio - 1)
+            raise ValueError("This escalation method needs a user index. Load one or use OPCI.")
+        return _index_value(to_date, b, notes) / _index_value(from_date, b, notes)
     raise ValueError(f"Unknown escalation method '{how}'")
 
 
+def projection(b: EstimateBasis, how: str) -> dict | None:
+    """Step 4 projection from the latest published OPCI quarter to the estimate date.
+
+    (1 + inflation + real escalation) per year, low, mid and high. None when
+    the estimate date is on or before the latest published quarter.
+    """
+    if how != "opci":
+        return None
+    target = b.resolved_estimate_date()
+    latest = opci_link.latest_quarter(b.opci_release)
+    if "Q" not in target:
+        if opci_link.value(target, b.opci_release) is None and int(target) > int(latest[:4]):
+            raise ValueError(f"Estimate date {target} is beyond published OPCI data. "
+                             "Enter a quarter, for example 2029 Q4.")
+        return None
+    if opci_link.quarter_number(target) <= opci_link.quarter_number(latest):
+        return None
+    years = (opci_link.quarter_number(target) - opci_link.quarter_number(latest)) / 4
+    rates = b.projection_rates()
+    out = {"from": latest, "to": target, "years": years, "rates": rates}
+    for case, real in zip(("low", "mid", "high"), rates["real"]):
+        out[case] = (1 + rates["inflation"] + real) ** years
+    return out
+
+
 def escalation_cases(b: EstimateBasis) -> tuple[list[tuple[str, str]], list[str]]:
-    """The escalation cases to run, and any warning."""
+    """The escalation case to run (always one), and any warning."""
     warn: list[str] = []
     mode = b.escalation_mode
     if mode == "auto":
-        if b.cost_index:
-            return [("High", "index"), ("Low", "damped")], warn
-        warn.append(
-            f"No cost index loaded, so escalation is a single case at "
-            f"{b.escalation_rate:.1%} a year. This is rough over long periods; "
-            f"load an index (for example {b.index_name}) to run two cases."
-        )
-        return [("Single", "constant")], warn
-    if mode == "two_cases":
-        return [("High", b.two_case_high), ("Low", b.two_case_low)], warn
-    if mode in ("constant", "index", "damped"):
-        return [("Single", mode)], warn
+        mode = "user_index" if b.cost_index else "opci"
+    if mode == "opci":
+        return [("OPCI", "opci")], warn
+    if mode == "user_index":
+        if not b.cost_index:
+            raise ValueError("User index chosen but none loaded. Load one or use OPCI.")
+        warn.append(f"Escalation uses your loaded index ({b.index_name}) in place of OPCI.")
+        return [(f"User index ({b.index_name})", "index")], warn
+    if mode == "constant":
+        warn.append(f"Escalation is a constant {b.escalation_rate:.1%} a year. The guideline keeps "
+                    "the constant rate as a sensitivity only.")
+        return [("Constant rate", "constant")], warn
     raise ValueError(f"Unknown escalation mode '{mode}'")
+
+
+def escalation_source(b: EstimateBasis) -> str:
+    """Plain label for the index behind this result, for the outputs."""
+    how = escalation_cases(b)[0][0][1]
+    if how == "index":
+        return f"User index: {b.index_name} (replaces OPCI)"
+    if how == "constant":
+        return f"Constant rate {b.escalation_rate:.1%} a year ({opci_link.stamp_label(b.opci_release)} not used)"
+    return opci_link.stamp_label(b.opci_release)
 
 
 def _gas_factor(level: str, b: EstimateBasis, notes: list[str], who: str) -> float:
@@ -138,6 +194,7 @@ def select_analogs(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
     small, large = F.SIZE_CLUSTERS
     t = b.train_size_mtpa
     target_cluster = "small" if t < small else "large" if t > large else "standard"
+    opci_start = opci_link.first_year(b.opci_release) if escalation_cases(b)[0][0][1] == "opci" else None
     reasons = []
     for _, r in pool.iterrows():
         why = ""
@@ -160,6 +217,8 @@ def select_analogs(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
         elif (b.process_family_filter and b.process_family not in ("not_chosen",)
               and r["process_family"] != b.process_family):
             why = "Different process family"
+        elif opci_start is not None and r["cost_year"] < opci_start:
+            why = f"Cost year before OPCI data ({opci_start})"
         reasons.append(why)
     pool["selection_note"] = reasons
     pool["selected"] = pool["selection_note"] == ""
@@ -176,6 +235,9 @@ def normalize(sel: pd.DataFrame, b: EstimateBasis, how: str, exponent: float,
     target_gas = _gas_factor(b.feed_gas, b, notes, "Target") if liq else 1.0
     plant_scaling = liq and b.multi_train_method == "plant_capacity"
     f_target = target_train_factor(b)
+    band = opci_link.band(b.opci_release) if how == "opci" else None
+    target = b.resolved_estimate_date()
+    proj = projection(b, how)
     rows = []
     for _, r in sel.iterrows():
         rec = {"id": r["id"], "project": r["project"], "case": how}
@@ -183,8 +245,20 @@ def normalize(sel: pd.DataFrame, b: EstimateBasis, how: str, exponent: float,
         rec["u_reported"] = u
 
         # Step 4: escalation
-        f_esc = escalation_factor(int(r["cost_year"]), b.estimate_year, how, b, notes)
-        rec["f_esc"] = f_esc
+        if proj:
+            f_pub = escalation_factor(int(r["cost_year"]), proj["from"], how, b, notes)
+            f_proj = proj["mid"]
+        else:
+            f_pub, f_proj = escalation_factor(int(r["cost_year"]), target, how, b, notes), 1.0
+        f_esc = f_pub * f_proj
+        rec.update(f_published=f_pub, f_projection=f_proj, f_esc=f_esc)
+        rec["esc_band"] = float("nan")
+        if band is not None:
+            shock_dates = opci_link.is_shock_year(r["cost_year"]) or opci_link.is_shock_year(target[:4])
+            rec["esc_band"] = band["shock"] if shock_dates else band["normal"]
+            shock = opci_link.supply_shock_note(int(r["cost_year"]), target)
+            if shock:
+                notes.append(shock)
         u *= f_esc
         rec["u_escalated"] = u
 
@@ -268,17 +342,17 @@ def fit_exponent(journey: pd.DataFrame, sel: pd.DataFrame) -> dict:
 
 
 def calibrate_damping(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
-    """Step 4 calibration: how much of the index change real costs followed.
+    """Step 4 calibration diagnostic: how much of the index change real costs followed.
 
-    A clean pair has the same region, site type and contractor, both figures
+    Report only: it never changes the estimate. The index is the one in use
+    (OPCI, or a loaded user index). A clean pair has the same region, site type and contractor, both figures
     are budgets, and the FIDs are at least five years apart.
         f = (actual cost ratio - 1) / (index ratio - 1)
     Actual costs are compared after location, scope and size normalization,
     without escalation.
     """
     cols = ["earlier", "later", "years", "actual_ratio", "index_ratio", "f"]
-    if not b.cost_index:
-        return pd.DataFrame(columns=cols)
+    how = escalation_cases(b)[0][0][1]
     pool = df[(df["facility_type"] == b.facility_type) & (df["contingency_status"] == "budget")]
     pool = pool[pool["scope"].isin(b.scopes) | pool["plant_usd_million"].notna()]
     pool = pool[~pool["epc_contractor"].str.lower().isin(["", "not stated"])]
@@ -295,8 +369,10 @@ def calibrate_damping(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
                     or a["site_type"] != c["site_type"] or a["epc_contractor"] != c["epc_contractor"]):
                 continue
             actual = norm.loc[late["id"], "u_final"] / norm.loc[early["id"], "u_final"]
-            idx = (_index_value(int(late["cost_year"]), b, notes)
-                   / _index_value(int(early["cost_year"]), b, notes))
+            try:
+                idx = escalation_factor(int(early["cost_year"]), int(late["cost_year"]), how, b, notes)
+            except ValueError:
+                continue  # a cost year outside the index data
             f = (actual - 1) / (idx - 1) if not math.isclose(idx, 1) else float("nan")
             rows.append({
                 "earlier": f"{early['project']} ({early['cost_year']})",
@@ -668,6 +744,7 @@ class EstimateResult:
     references: pd.DataFrame
     warnings: list[str]
     notes: list[str] = field(default_factory=list)
+    escalation: dict = field(default_factory=dict)
 
     @property
     def unit_cost(self) -> float:
@@ -682,7 +759,7 @@ class EstimateResult:
         lines = [
             f"FEL 1 estimate, {b.option_name}: {b.trains} x {b.train_size_mtpa:g} MTPA "
             f"{F.FACILITY_TYPES[b.facility_type]}, {b.site_type}, {b.location_name}",
-            f"Money of {b.estimate_year}, {cur} million",
+            f"Estimate date {opci_link.show_period(b.resolved_estimate_date())}, {cur} million",
             f"  Low   {self.in_report_currency(self.low):>10,.0f}",
             f"  Base  {self.in_report_currency(self.central):>10,.0f}   "
             f"({self.unit_cost:,.0f} USD per tpa)",
@@ -690,6 +767,7 @@ class EstimateResult:
             f"  {self.stats['count']} analogs, n = {self.exponent:.2f}, base method: {self.base_method}",
             "  AACE Class 5. Reasoned bounds, not a statistical P10 and P90.",
         ]
+        lines += [f"  {x}" for x in self.escalation.get("lines", [])]
         lines += [f"  Note: {w}" for w in self.warnings]
         return "\n".join(lines)
 
@@ -837,9 +915,19 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
     t = F.TECHNOLOGY_SENSITIVITY
     sens += [{"sensitivity": f"Technology -{t:.0%}", "central": central * (1 - t)},
              {"sensitivity": f"Technology +{t:.0%}", "central": central * (1 + t)}]
-    for _, c in core.cases.iterrows():
-        if len(core.cases) > 1:
-            sens.append({"sensitivity": f"Escalation case: {c['case']} ({c['method']})", "central": c["base"] + shift})
+    how = core.cases.iloc[0]["method"]
+    proj = projection(b, how)
+    if proj:
+        for case in ("low", "high"):
+            sens.append({"sensitivity": f"Projection {case} ({proj['rates']['real'][0 if case == 'low' else 2]:+.1%} "
+                                        "real a year)", "central": central * proj[case] / proj["mid"]})
+    if how != "constant":
+        try:
+            alt = _core(df, b.with_changes(escalation_mode="constant")).central
+            sens.append({"sensitivity": f"Escalation at a constant {b.escalation_rate:.1%} a year",
+                         "central": alt + shift})
+        except ValueError:
+            pass
     if b.is_liquefaction and b.trains > 1 and b.multi_train_method != "plant_capacity":
         try:
             alt = _core(df, b.with_changes(multi_train_method="plant_capacity")).central
@@ -866,6 +954,8 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
     refs += [{"item": a, "used_for": "Factor: " + s, "source": u} for a, s, u in F.FACTOR_REFERENCES]
     refs_df = pd.DataFrame(refs)
 
+    esc = escalation_summary(b, how, proj, core.journey, central)
+
     methods_df = pd.DataFrame([vars(m) for m in methods])
     methods_df["chosen"] = methods_df["name"] == chosen.name
 
@@ -875,8 +965,40 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         site_register=core.register, methods=methods_df, base_method=chosen.name, base_reason=why,
         central=central, low=low, high=high, range_parts=range_parts, blocks_by_area=area_df,
         blocks_by_type=type_df, sensitivities=sens_df, contingency=core.contingency, log=log,
-        references=refs_df, warnings=warnings, notes=core.notes,
+        references=refs_df, warnings=warnings, notes=core.notes, escalation=esc,
     )
+
+
+def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: pd.DataFrame,
+                       central: float) -> dict:
+    """Step 4 outputs: estimate date, published part, projection and reference line."""
+    show = opci_link.show_period
+    target = b.resolved_estimate_date()
+    out = {"source": escalation_source(b), "estimate_date": target, "projection": proj,
+           "reference_date": None, "reference_central": None}
+    lines = [f"Estimate date {show(target)}. Cost index: {out['source']}."]
+    if how == "opci":
+        latest = opci_link.latest_quarter(b.opci_release)
+        if proj:
+            ref = central / proj["mid"]
+            r = proj["rates"]
+            lines += [
+                f"Published data to {show(latest)}: x{journey['f_published'].median():.2f} "
+                "(median of the analogs; each analog in the journey table).",
+                f"Projection {show(latest)} to {show(target)}: x{proj['mid']:.2f} "
+                f"(low {proj['low']:.2f}, high {proj['high']:.2f}). This part is a projection, not data.",
+                f"Projection rates: inflation {r['inflation']:.1%} a year ({r['inflation_source']}); "
+                f"real escalation {r['real'][0]:+.1%}, {r['real'][1]:+.1%}, {r['real'][2]:+.1%} a year "
+                f"({r['real_source']}).",
+            ]
+            if "stopgap" in (r["inflation_source"], r["real_source"]):
+                lines.append(f"{r['note']}.")
+        else:
+            ref = central * _opci_value(latest, b, []) / _opci_value(target, b, [])
+        out.update(reference_date=latest, reference_central=ref)
+        lines.append(f"Reference line: USD {ref:,.0f} million at {show(latest)} (today's money).")
+    out["lines"] = lines
+    return out
 
 
 # ================================================================ Step 12: comparing options

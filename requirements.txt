@@ -4,3 +4,4 @@ openpyxl>=3.1
 streamlit>=1.40
 plotly>=5.20
 pytest>=8.0
+opci>=1.0,<2.0

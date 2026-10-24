@@ -1,11 +1,15 @@
 """Checks of each guideline step on small hand-made analog sets."""
 import math
 
+import numpy as np
+import opci
 import pandas as pd
 import pytest
+from opci.index import SUPPLY_SHOCK_NOTE
 
 from fel1_lng_cost import (
     BrownfieldShares, Method, SiteItem, choose_base, compare_options, escalation_factor,
+    escalation_source, opci_link,
     estimate, load_analogs, make_basis, tank_cost,
 )
 from fel1_lng_cost.analogs import check_analogs
@@ -33,7 +37,7 @@ def analogs(tmp_path, *overrides):
 
 
 def basis(**kw):
-    kw.setdefault("estimate_year", 2020)
+    kw.setdefault("estimate_date", "2020")
     kw.setdefault("min_count_stop", 1)
     kw.setdefault("min_count_warn", 1)
     kw.setdefault("definition_growth", (0.0, 0.0))
@@ -72,30 +76,131 @@ def test_minimum_count_stops(tmp_path):
 
 
 # ------------------------------------------------------------- Step 4
+def opci_ratio(base, target, release=None, freq="annual", base_freq="annual"):
+    def rows(f):
+        return {r["period"]: r["value"] for r in opci.read_release(release or opci_link.latest_release(), f)["rows"]}
+    return rows(freq)[str(target)] / rows(base_freq)[str(base)]
+
+
 def test_escalation_methods():
-    b = make_basis(escalation_rate=0.03, cost_index={2015: 100.0, 2025: 150.0}, damping_f=0.5)
+    b = make_basis(escalation_rate=0.03, cost_index={2015: 100.0, 2025: 150.0})
     assert escalation_factor(2015, 2017, "constant", b) == pytest.approx(1.03 ** 2)
     assert escalation_factor(2015, 2025, "index", b) == pytest.approx(1.5)
-    assert escalation_factor(2015, 2025, "damped", b) == pytest.approx(1.25)
+    assert escalation_factor(2015, 2025, "opci", b) == pytest.approx(opci_ratio(2015, 2025))
     with pytest.raises(ValueError):
         escalation_factor(2015, 2025, "index", make_basis())
+    with pytest.raises(ValueError):
+        escalation_factor(2015, 2025, "damped", b)  # half-change low case retired
 
 
-def test_two_cases_and_central_is_midpoint(tmp_path):
+def test_opci_single_case_is_default(tmp_path):
     df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
-    b = basis(estimate_year=2025, cost_index={2015: 100.0, 2025: 150.0})
-    res = estimate(df, b)
-    assert set(res.cases["case"]) == {"High", "Low"}
-    assert central_unit(res) == pytest.approx(1000 * (1.5 + 1.25) / 2)
+    res = estimate(df, basis(estimate_date="2025"))
+    assert list(res.cases["case"]) == ["OPCI"]
+    assert central_unit(res) == pytest.approx(1000 * opci_ratio(2015, 2025))
+    assert escalation_source(res.basis) == opci_link.stamp_label()
+    assert any("constant" in s for s in res.sensitivities["sensitivity"])
 
 
-def test_calibration_pair(tmp_path):
+def test_user_index_overrides_opci(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    res = estimate(df, basis(estimate_date="2025", cost_index={2015: 100.0, 2025: 150.0}))
+    assert len(res.cases) == 1
+    assert central_unit(res) == pytest.approx(1500)
+    assert any("in place of OPCI" in w for w in res.warnings)
+    assert "replaces OPCI" in escalation_source(res.basis)
+
+
+def test_freeze_reproduces_named_release(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}, {"cost_year": 2019, "fid_year": 2019})
+    name = opci_link.releases()[0]
+    frozen = estimate(df, basis(estimate_date="2025", opci_release=name, weighting="equal"))
+    again = estimate(df, basis(estimate_date="2025", opci_release=name, weighting="equal"))
+    assert frozen.central == again.central
+    expected = 500 * (opci_ratio(2015, 2025, name) + opci_ratio(2019, 2025, name))
+    assert central_unit(frozen) == pytest.approx(expected, rel=1e-12)
+    assert "(frozen)" in escalation_source(frozen.basis)
+    with pytest.raises(ValueError, match="not installed"):
+        estimate(df, basis(estimate_date="2025", opci_release="data-1999-01"))
+
+
+def test_band_and_supply_shock_note_from_opci(tmp_path):
+    bd = opci_link.band()
+    assert bd["normal"] == pytest.approx(0.055, abs=0.005)
+    assert bd["shock"] == pytest.approx(0.09, abs=0.005)
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}, {"cost_year": 2021, "fid_year": 2021})
+    res = estimate(df, basis(estimate_date="2025", fid_window_years=None))
+    band = res.journey.set_index("id")["esc_band"]
+    assert band["a1"] == bd["normal"] and band["a2"] == bd["shock"]
+    assert SUPPLY_SHOCK_NOTE in res.notes
+    calm = estimate(analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}), basis(estimate_date="2025"))
+    assert SUPPLY_SHOCK_NOTE not in calm.notes
+    to_shock = estimate(analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}), basis(estimate_date="2021"))
+    assert SUPPLY_SHOCK_NOTE in to_shock.notes
+    assert to_shock.journey["esc_band"].iloc[0] == bd["shock"]  # estimate date in 2021 widens it too
+
+
+def test_no_projection_up_to_latest_quarter(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    latest = opci_link.latest_quarter()
+    for date in (None, latest, "2024Q2"):
+        res = estimate(df, basis(estimate_date=date))
+        assert res.escalation["projection"] is None
+        assert res.journey["f_projection"].eq(1.0).all()
+        assert not any("rojection" in line for line in res.escalation["lines"])
+    res = estimate(df, basis(estimate_date="2024Q2"))
+    assert central_unit(res) == pytest.approx(1000 * opci_ratio(2015, "2024Q2", freq="quarterly"))
+    assert res.escalation["reference_date"] == latest
+    assert res.escalation["reference_central"] == pytest.approx(
+        res.central * opci_ratio("2024Q2", latest, freq="quarterly", base_freq="quarterly"))
+
+
+def test_projection_beyond_latest_quarter(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    latest = opci_link.latest_quarter()
+    res = estimate(df, basis(estimate_date="2029 Q4"))
+    p = res.escalation["projection"]
+    years = (2029 * 4 + 3 - opci_link.quarter_number(latest)) / 4
+    assert p["from"] == latest and p["to"] == "2029Q4" and p["years"] == years
+    assert p["mid"] == pytest.approx((1 + 0.025 + 0.015) ** years)
+    assert p["low"] == pytest.approx(1.025 ** years) and p["high"] == pytest.approx(1.06 ** years)
+    j = res.journey.iloc[0]
+    assert j["f_published"] == pytest.approx(opci_ratio(2015, latest, freq="quarterly"))
+    assert j["f_esc"] == pytest.approx(j["f_published"] * p["mid"])
+    text = " ".join(res.escalation["lines"])
+    assert "projection, not data" in text and "stopgap" in text.lower()
+    assert res.escalation["reference_central"] == pytest.approx(res.central / p["mid"])
+    sens = " ".join(res.sensitivities["sensitivity"])
+    assert "Projection low" in sens and "Projection high" in sens
+    own = estimate(df, basis(estimate_date="2029Q4", projection_inflation=0.02, projection_real=(0.0, 0.01, 0.02)))
+    assert own.escalation["projection"]["mid"] == pytest.approx(1.03 ** years)
+    assert "stopgap" not in " ".join(own.escalation["lines"]).lower()
+    with pytest.raises(ValueError, match="Enter a quarter"):
+        estimate(df, basis(estimate_date="2029"))
+    with pytest.raises(ValueError, match="not a quarter"):
+        estimate(df, basis(estimate_date="Q4 2029"))
+
+
+def test_analog_before_opci_data_is_filtered(tmp_path):
+    df = analogs(tmp_path, {}, {"cost_year": 2005, "fid_year": 2005})
+    res = estimate(df, basis(fid_window_years=None))
+    notes = dict(zip(res.pool["id"], res.pool["selection_note"]))
+    assert notes["a2"].startswith("Cost year before OPCI data")
+
+
+def test_calibration_pair_is_report_only(tmp_path):
     df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}, {"cost_year": 2023, "fid_year": 2023,
                                                                   "cost_amount_million": 5500})
-    b = basis(estimate_year=2025, cost_index={2015: 100.0, 2023: 140.0, 2025: 150.0}, fid_window_years=None)
-    cal = estimate(df, b).calibration
-    assert len(cal) == 1
-    assert cal.loc[0, "f"] == pytest.approx((1.1 - 1) / (1.4 - 1))
+    b = basis(estimate_date="2025", cost_index={2015: 100.0, 2023: 140.0, 2025: 150.0}, fid_window_years=None)
+    res = estimate(df, b)
+    assert len(res.calibration) == 1
+    assert res.calibration.loc[0, "f"] == pytest.approx((1.1 - 1) / (1.4 - 1))
+    on_opci = estimate(df, basis(estimate_date="2025", fid_window_years=None))
+    idx = opci_ratio(2015, 2023)
+    assert on_opci.calibration.loc[0, "f"] == pytest.approx((1.1 - 1) / (idx - 1))
+    assert central_unit(on_opci) == pytest.approx(
+        np.average([1000 * opci_ratio(2015, 2025), 1100 * opci_ratio(2023, 2025)],
+                   weights=on_opci.weights.set_index("id").loc[["a1", "a2"], "weight"]))
 
 
 # ------------------------------------------------------------- Step 5
