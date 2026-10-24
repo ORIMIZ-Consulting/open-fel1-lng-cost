@@ -100,24 +100,38 @@ def escalation_factor(from_date, to_date, how: str, b: EstimateBasis,
     raise ValueError(f"Unknown escalation method '{how}'")
 
 
-def projection(b: EstimateBasis, how: str) -> dict | None:
-    """Step 4 projection from the latest published OPCI quarter to the estimate date.
+def last_published(b: EstimateBasis, how: str) -> str | None:
+    """Last period of index data: the latest published OPCI quarter, or the
+    last year of a loaded user index. None for the constant rate."""
+    if how == "opci":
+        return opci_link.latest_quarter(b.opci_release)
+    if how == "index":
+        return str(max(b.cost_index))
+    return None
 
-    (1 + inflation + real escalation) per year, low, mid and high. None when
-    the estimate date is on or before the latest published quarter.
+
+def projection(b: EstimateBasis, how: str) -> dict | None:
+    """Step 4 projection from the last period of index data to the estimate date.
+
+    (1 + inflation + real escalation) per year, low, mid and high. Applies to
+    OPCI and to a loaded user index (from its last year); not to the constant
+    rate. None when the estimate date is on or before the last period.
     """
-    if how != "opci":
+    latest = last_published(b, how)
+    if latest is None:
         return None
     target = b.resolved_estimate_date()
-    latest = opci_link.latest_quarter(b.opci_release)
-    if "Q" not in target:
+    if how == "index":
+        years = _decimal_year(target) - _decimal_year(latest)
+    elif "Q" not in target:
         if opci_link.value(target, b.opci_release) is None and int(target) > int(latest[:4]):
             raise ValueError(f"Estimate date {target} is beyond published OPCI data. "
                              "Enter a quarter, for example 2029 Q4.")
         return None
-    if opci_link.quarter_number(target) <= opci_link.quarter_number(latest):
+    else:
+        years = (opci_link.quarter_number(target) - opci_link.quarter_number(latest)) / 4
+    if years <= 0:
         return None
-    years = (opci_link.quarter_number(target) - opci_link.quarter_number(latest)) / 4
     rates = b.projection_rates()
     out = {"from": latest, "to": target, "years": years, "rates": rates}
     for case, real in zip(("low", "mid", "high"), rates["real"]):
@@ -266,7 +280,8 @@ def normalize(sel: pd.DataFrame, b: EstimateBasis, how: str, exponent: float,
         if r["id"] in b.analog_location_overrides:
             loc_a = b.analog_location_overrides[r["id"]]
         else:
-            loc_a = b.location_groups.get(r["location_group"], 1.0) + F.LOCATION_STEP * r["location_steps"]
+            loc_a = opci_link.location(r["location_code"])["factor"]
+        rec["loc_analog_code"] = r["location_code"]
         rec["loc_analog"] = loc_a
         rec["loc_target"] = target_loc
         f_loc = _location_effect(target_loc, b) / _location_effect(loc_a, b)
@@ -745,6 +760,7 @@ class EstimateResult:
     warnings: list[str]
     notes: list[str] = field(default_factory=list)
     escalation: dict = field(default_factory=dict)
+    location: dict = field(default_factory=dict)
 
     @property
     def unit_cost(self) -> float:
@@ -767,7 +783,7 @@ class EstimateResult:
             f"  {self.stats['count']} analogs, n = {self.exponent:.2f}, base method: {self.base_method}",
             "  AACE Class 5. Reasoned bounds, not a statistical P10 and P90.",
         ]
-        lines += [f"  {x}" for x in self.escalation.get("lines", [])]
+        lines += [f"  {x}" for x in self.escalation.get("lines", []) + self.location.get("lines", [])]
         lines += [f"  Note: {w}" for w in self.warnings]
         return "\n".join(lines)
 
@@ -901,17 +917,15 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
             sens.append({"sensitivity": f"Exponent n = {n_alt}", "central": alt + shift})
         except ValueError:
             pass
-    for step in (-1, 1):
-        if b.location_factor is not None:
-            ch = {"location_factor": b.location_factor + step * F.LOCATION_STEP}
-        else:
-            ch = {"location_steps": b.location_steps + step}
-        try:
-            alt = _core(df, b.with_changes(**ch)).central
-            sens.append({"sensitivity": f"Target location {step:+d} step ({step * F.LOCATION_STEP:+.2f})",
-                         "central": alt + shift})
-        except ValueError:
-            pass
+    loc = b.target_location()
+    if loc["override"] is None and loc["low"] != loc["high"]:
+        for end in ("low", "high"):
+            try:
+                alt = _core(df, b.with_changes(location_factor=loc[end])).central
+                sens.append({"sensitivity": f"Target location {end} ({loc[end]:.2f}, OPCI range)",
+                             "central": alt + shift})
+            except ValueError:
+                pass
     t = F.TECHNOLOGY_SENSITIVITY
     sens += [{"sensitivity": f"Technology -{t:.0%}", "central": central * (1 - t)},
              {"sensitivity": f"Technology +{t:.0%}", "central": central * (1 + t)}]
@@ -955,6 +969,7 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
     refs_df = pd.DataFrame(refs)
 
     esc = escalation_summary(b, how, proj, core.journey, central)
+    loc_out = location_summary(b)
 
     methods_df = pd.DataFrame([vars(m) for m in methods])
     methods_df["chosen"] = methods_df["name"] == chosen.name
@@ -965,8 +980,24 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         site_register=core.register, methods=methods_df, base_method=chosen.name, base_reason=why,
         central=central, low=low, high=high, range_parts=range_parts, blocks_by_area=area_df,
         blocks_by_type=type_df, sensitivities=sens_df, contingency=core.contingency, log=log,
-        references=refs_df, warnings=warnings, notes=core.notes, escalation=esc,
+        references=refs_df, warnings=warnings, notes=core.notes, escalation=esc, location=loc_out,
     )
+
+
+def location_summary(b: EstimateBasis) -> dict:
+    """Step 5 outputs: the target's OPCI factor, range, confidence and source."""
+    loc = b.target_location()
+    lines = []
+    if loc["to"] != opci_link.NOT_SET:
+        lines.append(f"Target location: {opci_link.location_label(b.location_code)}, confidence "
+                     f"{loc['confidence']} (OPCI location table {loc['location_version']}).")
+        lines.append(f"Location source: {loc['source']}")
+    else:
+        lines.append("Target location: not set (no location adjustment).")
+    if loc["override"] is not None:
+        lines.append(f"User location factor {loc['override']:.2f} replaces OPCI {loc['factor']:.2f} "
+                     "(logged as an override).")
+    return {**loc, "lines": lines}
 
 
 def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: pd.DataFrame,
@@ -977,13 +1008,15 @@ def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: p
     out = {"source": escalation_source(b), "estimate_date": target, "projection": proj,
            "reference_date": None, "reference_central": None}
     lines = [f"Estimate date {show(target)}. Cost index: {out['source']}."]
-    if how == "opci":
-        latest = opci_link.latest_quarter(b.opci_release)
+    latest = last_published(b, how)
+    if latest is not None:
+        index_value = _opci_value if how == "opci" else _index_value
         if proj:
             ref = central / proj["mid"]
             r = proj["rates"]
             lines += [
-                f"Published data to {show(latest)}: x{journey['f_published'].median():.2f} "
+                f"Published {'data' if how == 'opci' else 'index'} to {show(latest)}: "
+                f"x{journey['f_published'].median():.2f} "
                 "(median of the analogs; each analog in the journey table).",
                 f"Projection {show(latest)} to {show(target)}: x{proj['mid']:.2f} "
                 f"(low {proj['low']:.2f}, high {proj['high']:.2f}). This part is a projection, not data.",
@@ -994,9 +1027,10 @@ def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: p
             if "stopgap" in (r["inflation_source"], r["real_source"]):
                 lines.append(f"{r['note']}.")
         else:
-            ref = central * _opci_value(latest, b, []) / _opci_value(target, b, [])
+            ref = central * index_value(latest, b, []) / index_value(target, b, [])
         out.update(reference_date=latest, reference_central=ref)
-        lines.append(f"Reference line: USD {ref:,.0f} million at {show(latest)} (today's money).")
+        where = "today's money" if how == "opci" else "last period of your index"
+        lines.append(f"Reference line: USD {ref:,.0f} million at {show(latest)} ({where}).")
     out["lines"] = lines
     return out
 

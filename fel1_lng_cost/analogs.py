@@ -17,12 +17,13 @@ from pathlib import Path
 import pandas as pd
 
 from . import factors as F
+from . import opci_link
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PUBLIC_FILE = DATA_DIR / "public_analogs.csv"
 
 REQUIRED_COLUMNS = [
-    "id", "project", "country", "region", "location_group", "location_steps",
+    "id", "project", "country", "region", "location_code",
     "facility_type", "site_type", "trains", "capacity_mtpa", "fid_year", "cost_year",
     "cost_amount_million", "currency", "fx_to_usd", "cost_basis", "scope",
     "liquids_scope", "contingency_status", "source_url",
@@ -62,7 +63,12 @@ def check_analogs(df: pd.DataFrame) -> AnalogCheck:
     warnings: list[str] = []
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
-        return AnalogCheck([f"Missing columns: {', '.join(missing)}"], warnings)
+        hint = ""
+        if "location_group" in df.columns:
+            hint = (" Replace location_group and location_steps with location_code, an OPCI "
+                    "location code such as US-GC.")
+        return AnalogCheck([f"Missing columns: {', '.join(missing)}.{hint}"], warnings)
+    codes = set(opci_link.locations()) | {opci_link.NOT_SET}
     if df["id"].duplicated().any():
         errors.append("Duplicate ids: " + ", ".join(sorted(df.loc[df["id"].duplicated(), "id"])))
 
@@ -82,8 +88,9 @@ def check_analogs(df: pd.DataFrame) -> AnalogCheck:
             errors.append(f"{rid}: unknown contingency_status '{r['contingency_status']}'")
         if r["liquids_scope"] not in LIQUIDS:
             errors.append(f"{rid}: unknown liquids_scope '{r['liquids_scope']}'")
-        if r["location_group"] not in F.LOCATION_GROUPS:
-            warnings.append(f"{rid}: location group '{r['location_group']}' not in the library; 1.00 used")
+        if r["location_code"] not in codes:
+            errors.append(f"{rid}: location code '{r['location_code']}' is not in the OPCI location table. "
+                          "New locations are added to OPCI, not to this tool.")
         for col in ("capacity_mtpa", "cost_amount_million", "fx_to_usd", "trains"):
             v = r[col]
             if pd.isna(v) or float(v) <= 0:
@@ -133,7 +140,6 @@ def load_analogs(*paths, include_public: bool = True) -> pd.DataFrame:
     df["process_family"] = df["process_family"].fillna("not_stated")
     df["contracting_basis"] = df["contracting_basis"].fillna("unknown")
     df["data_quality"] = df["data_quality"].fillna("C")
-    df["location_steps"] = df["location_steps"].fillna(0).astype(int)
 
     result = check_analogs(df)
     if not result.ok:

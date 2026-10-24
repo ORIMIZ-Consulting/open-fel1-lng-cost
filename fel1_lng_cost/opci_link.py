@@ -14,6 +14,8 @@ import opci
 from opci import paths
 from opci.calibrate import backtest
 from opci.index import SUPPLY_SHOCK_YEARS, supply_shock_warning
+from opci.locations import load_factors
+from opci.locations import version as location_version
 from opci.release import list_releases
 
 from . import factors as F
@@ -140,3 +142,31 @@ def projection_defaults() -> dict:
     """
     return {"inflation": F.STOPGAP_INFLATION, "real": F.STOPGAP_REAL_ESCALATION,
             "source": "stopgap", "note": F.STOPGAP_SOURCE}
+
+
+# ---------------------------------------------------------------- location (guideline Step 5)
+NOT_SET = "not_set"  # preview facility types: no location adjustment
+
+
+def locations() -> dict[str, dict]:
+    """The OPCI location table by code: factor, low, high, confidence, method, source."""
+    return load_factors()
+
+
+def location(code: str) -> dict:
+    """OPCI location factor for a code, against the US Gulf Coast (1.00)."""
+    if code == NOT_SET:
+        return {"factor": 1.0, "low": 1.0, "high": 1.0, "confidence": "-", "to": NOT_SET,
+                "to_name": "Not set (no location adjustment)", "method": "-", "source": "-",
+                "as_of": None, "notes": {}, "location_version": location_version()}
+    if code not in locations():
+        raise ValueError(f"Unknown OPCI location code '{code}'. New locations are added to OPCI, "
+                         f"not to this tool. Known codes: {', '.join(locations())}.")
+    return opci.location(to=code)
+
+
+def location_label(code: str) -> str:
+    loc = location(code)
+    if code == NOT_SET:
+        return loc["to_name"]
+    return f"{loc['to_name']} ({code}) {loc['factor']:.2f} ({loc['low']:.2f} to {loc['high']:.2f})"

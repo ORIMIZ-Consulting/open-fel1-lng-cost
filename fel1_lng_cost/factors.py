@@ -116,17 +116,8 @@ STOPGAP_REAL_ESCALATION = (0.0, 0.015, 0.035)  # low, mid, high
 STOPGAP_SOURCE = "Stopgap until OPCI holds the data (guideline Step 4, decision D4)"
 
 # ---------------------------------------------------------------- Step 5
-# Location factor groups, USA = 1.00. OIES Figure 5; "remote" from OIES text.
-LOCATION_GROUPS = {
-    "usa": (1.00, "USA"),
-    "yamal": (1.25, "Yamal (Russian Arctic)"),
-    "png": (1.29, "Papua New Guinea"),
-    "queensland": (1.34, "Queensland"),
-    "nw_australia": (1.72, "North West Australia"),
-    "remote": (1.30, "Remote site"),
-    "not_set": (1.00, "Not set (no adjustment)"),
-}
-LOCATION_STEP = 0.10  # guideline step rule; judgment
+# Location factors, ranges, confidence and sources come from the OPCI location
+# table (opci_link.location). New locations are added to OPCI, not here.
 CONSTRUCTION_SHARE = 0.32  # OIES Table 5
 
 # ---------------------------------------------------------------- Step 6
@@ -210,7 +201,8 @@ AACE_CLASSES = (
 # ---------------------------------------------------------------- references
 FACTOR_REFERENCES = [
     ("Escalation index, band and supply-shock note", OPCI, OPCI_URL),
-    ("Location groups (USA 1.00 to NW Australia 1.72)", OIES, OIES_URL),
+    ("Location factors, ranges and confidence (OPCI location table)", OPCI + "; OIES NG137 groups and step rule",
+     OPCI_URL),
     ("Cost type split (owner 10%, engineering 8%, equipment 30%, bulks 20%, construction 32%)", OIES, OIES_URL),
     ("Brownfield to greenfield x1.50", OIES, OIES_URL),
     ("Partly brownfield site x1.15", OIES + " (group adjustment)", OIES_URL),
@@ -226,7 +218,6 @@ FACTOR_REFERENCES = [
     ("Definition growth 0 / +15%", GUIDE + " (Donggi-Senoro, PNG LNG growth)", ""),
     ("Storage tank about USD 200m per 180,000 m3", TANK_REFERENCE["source"], ""),
     ("Dredging USD 15 to 30 per m3", "Cuyutlan (Dredging Today, 2010); Soyo (SWZ Maritime, 2010)", ""),
-    ("Location step 0.10", GUIDE + "; judgment", ""),
     ("Storage and marine 8% of EPC; utilities 60% of remainder", JUDGMENT, ""),
     ("Contingency rate 15% for the non-budget share", JUDGMENT, ""),
     ("Rubric points to weight: 0-1 = 1, 2-3 = 2, 4-5 = 3", JUDGMENT + " (tool's mapping)", ""),

@@ -51,14 +51,17 @@ with st.sidebar:
     trains = c2.number_input("Trains", 1, 12, 1, 1)
     site_type = st.selectbox("Site type", list(F.SITE_TYPES[ftype]), format_func=F.SITE_TYPES[ftype].get)
     location_name = st.text_input("Location", "Target site")
-    groups = list(F.LOCATION_GROUPS)
-    group = st.selectbox("Nearest OIES location group", groups, index=groups.index(D.location_group),
-                         format_func=lambda g: f"{F.LOCATION_GROUPS[g][1]} ({F.LOCATION_GROUPS[g][0]:.2f})")
-    steps = st.slider("Steps of 0.10", -3, 3, 0,
-                      help="One step down for an established industrial LNG site with a trained "
-                           "workforce; one step up for a first-of-its-kind remote site.")
-    override = st.checkbox("Enter my own location factor")
-    loc_factor = st.number_input("Location factor", 0.5, 3.0, 1.0, 0.05) if override else None
+    codes = list(opci_link.locations()) + [opci_link.NOT_SET]
+    loc_code = st.selectbox("Location (OPCI location table)", codes, index=codes.index(D.location_code),
+                            format_func=opci_link.location_label,
+                            help="Factor against the US Gulf Coast (1.00), with its range. New locations "
+                                 "are added to OPCI, not to this tool.")
+    loc_info = opci_link.location(loc_code)
+    if loc_code != opci_link.NOT_SET:
+        st.caption(f"Confidence {loc_info['confidence']}. Method: {loc_info['method']}. "
+                   f"Source: {loc_info['source']}")
+    override = st.checkbox("Enter my own location factor (logged as an override)")
+    loc_factor = st.number_input("Location factor", 0.5, 3.0, float(loc_info["factor"]), 0.05) if override else None
     est_text = st.text_input("Estimate date (quarter)", opci_link.show_period(opci_link.latest_quarter()),
                              placeholder="2029 Q4",
                              help="The default is the latest published OPCI quarter.")
@@ -168,9 +171,6 @@ with tab_sw:
                               format_func={"full": "A/B. Whole factor (default)",
                                            "construction_share": "C. Only on the construction share"}.get)
         share = st.number_input("Construction share", 0.05, 1.0, D.construction_share, 0.01, key=f"cs{k}")
-        gtable = st.data_editor(
-            pd.DataFrame({"group": list(D.location_groups), "factor": list(D.location_groups.values())}),
-            disabled=["group"], hide_index=True, key=f"gt{k}", width=W)
         r = reason_box(5, f"r5{k}")
         if r:
             reasons["step:5"] = r
@@ -314,7 +314,8 @@ with tab_opt:
         b_trains = c3.number_input("Option B trains", 1, 12, int(trains))
         c1, c2, c3 = st.columns(3)
         b_train = c1.number_input("Option B MTPA per train", 0.1, 15.0, float(train), 0.1)
-        b_steps = c2.slider("Option B location steps", -3, 3, int(steps))
+        b_code = c2.selectbox("Option B location", codes, index=codes.index(loc_code),
+                              format_func=opci_link.location_label)
         b_items = c3.checkbox("Option B uses the same site items", True)
 
 methods = [Method(str(m.name), float(m.value_usd_million), int(m.judgment_calls or 0), str(m.note or ""))
@@ -345,7 +346,7 @@ except ValueError as err:
 
 common = dict(
     purpose=purpose, train_size_mtpa=float(train), trains=int(trains), site_type=site_type,
-    location_name=location_name, location_group=group, location_steps=int(steps), location_factor=loc_factor,
+    location_name=location_name, location_code=loc_code, location_factor=loc_factor,
     estimate_date=est_date, report_currency=currency, report_fx=float(fx), feed_gas=feed,
     co2_sequestration=co2, process_family=family, battery_limits=tuple(limits),
     class_low=float(class_low), class_high=float(class_high),
@@ -356,7 +357,7 @@ common = dict(
     escalation_mode=mode, opci_release=release, escalation_rate=float(rate),
     projection_inflation=proj_infl, projection_real=proj_real,
     cost_index=cost_index, index_name=idx_name, location_method=loc_method, construction_share=float(share),
-    location_groups=dict(zip(gtable["group"], gtable["factor"])), apply_owner_costs=own_on,
+    apply_owner_costs=own_on,
     owner_cost_factor=float(own_f), apply_site_factor=site_on,
     site_factors=dict(zip(stable["site_type"], stable["factor_to_greenfield"])),
     apply_multi_train=multi_on, multi_train_factor=float(multi_f), gas_method=gas if liq else "off",
@@ -434,7 +435,7 @@ if compare:
     try:
         b_basis = basis.with_changes(
             option_name=b_name, site_type=b_site, trains=int(b_trains), train_size_mtpa=float(b_train),
-            location_steps=int(b_steps), site_items=site_items if b_items else [], methods=[],
+            location_code=b_code, site_items=site_items if b_items else [], methods=[],
             brownfield_shares=None, weights={}, weight_reasons={}, drop_reasons={},
             site_types_allowed=(b_site,) if ftype == "flng" else basis.site_types_allowed)
         res_b = estimate(df, b_basis)
@@ -456,7 +457,7 @@ with tab_res:
     m4.metric("Unit cost", f"{res.unit_cost:,.0f} USD/tpa")
     st.caption(f"AACE Class 5. Base method: {res.base_method}. {res.base_reason} "
                "The range is a set of reasoned bounds, not a statistical P10 and P90.")
-    for line in res.escalation.get("lines", []):
+    for line in res.escalation.get("lines", []) + res.location.get("lines", []):
         st.caption(line)
     for w in res.warnings:
         st.warning(w)

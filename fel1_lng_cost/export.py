@@ -94,6 +94,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         ("Total capacity (MTPA)", b.capacity_mtpa),
         ("Site type", b.site_type),
         ("Location", f"{b.location_name}, factor {b.target_location_factor():.2f}"),
+        ("OPCI location", b.location_code),
         ("Estimate date", b.resolved_estimate_date().replace("Q", " Q")),
         ("Currency", b.report_currency),
         ("Cost index", escalation_source(b)),
@@ -118,8 +119,8 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
             ws.cell(row=row, column=2, value=value)
         row += 1
     row += 1
-    ws.cell(row=row, column=1, value="Escalation (Step 4)").font = BOLD
-    for line in r.escalation.get("lines", []):
+    ws.cell(row=row, column=1, value="Escalation and location (Steps 4 and 5)").font = BOLD
+    for line in r.escalation.get("lines", []) + r.location.get("lines", []):
         row += 1
         ws.cell(row=row, column=1, value=line).alignment = Alignment(wrap_text=True)
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)

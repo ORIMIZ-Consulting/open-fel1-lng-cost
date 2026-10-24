@@ -12,11 +12,12 @@ from fel1_lng_cost import (
     escalation_source, opci_link,
     estimate, load_analogs, make_basis, tank_cost,
 )
+from fel1_lng_cost import factors as F
 from fel1_lng_cost.analogs import check_analogs
 
 BASE_ROW = dict(
-    id="a1", project="Analog 1", country="USA", region="North America", location_group="usa",
-    location_steps=0, facility_type="onshore_liquefaction", site_type="greenfield", trains=1,
+    id="a1", project="Analog 1", country="USA", region="North America", location_code="US-GC",
+    facility_type="onshore_liquefaction", site_type="greenfield", trains=1,
     capacity_mtpa=5.0, train_size_mtpa="", fid_year=2020, cost_year=2020, cost_amount_million=5000,
     currency="USD", fx_to_usd=1.0, cost_basis="budget", scope="plant_only",
     plant_only_amount_million="", split_source="", liquids_scope="lean", gas_adjust="yes",
@@ -109,6 +110,28 @@ def test_user_index_overrides_opci(tmp_path):
     assert central_unit(res) == pytest.approx(1500)
     assert any("in place of OPCI" in w for w in res.warnings)
     assert "replaces OPCI" in escalation_source(res.basis)
+
+
+def test_user_index_projects_from_its_last_period(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    idx = {2015: 100.0, 2024: 140.0, 2025: 150.0}
+    res = estimate(df, basis(estimate_date="2029Q4", cost_index=idx))
+    p = res.escalation["projection"]
+    years = 2029.875 - 2025.5  # middle of 2029 Q4 less the middle of 2025
+    assert p["from"] == "2025" and p["years"] == pytest.approx(years)
+    assert p["mid"] == pytest.approx(1.04 ** years)  # same stopgap rates as OPCI
+    j = res.journey.iloc[0]
+    assert j["f_published"] == pytest.approx(1.5) and j["f_projection"] == pytest.approx(p["mid"])
+    assert central_unit(res) == pytest.approx(1500 * p["mid"])
+    assert res.escalation["reference_date"] == "2025"
+    assert res.escalation["reference_central"] == pytest.approx(res.central / p["mid"])
+    assert "projection, not data" in " ".join(res.escalation["lines"])
+    inside = estimate(df, basis(estimate_date="2024", cost_index=idx))
+    assert inside.escalation["projection"] is None
+    assert inside.escalation["reference_central"] == pytest.approx(inside.central * 150 / 140)
+    flat = estimate(df, basis(estimate_date="2029Q4", escalation_mode="constant"))
+    assert flat.escalation["projection"] is None and flat.escalation["reference_central"] is None
+    assert flat.journey["f_projection"].eq(1.0).all()
 
 
 def test_freeze_reproduces_named_release(tmp_path):
@@ -206,12 +229,39 @@ def test_calibration_pair_is_report_only(tmp_path):
 # ------------------------------------------------------------- Step 5
 def test_location_full_and_construction_share(tmp_path):
     df = analogs(tmp_path, {})
-    full = estimate(df, basis(location_group="remote"))
-    assert central_unit(full) == pytest.approx(1000 * 1.30)
-    split = estimate(df, basis(location_group="remote", location_method="construction_share"))
-    assert central_unit(split) == pytest.approx(1000 * (1 + 0.32 * 0.30))
-    stepped = estimate(df, basis(location_group="remote", location_steps=-1))
-    assert central_unit(stepped) == pytest.approx(1200)
+    remote = opci.location(to="REMOTE")["factor"]
+    full = estimate(df, basis(location_code="REMOTE"))
+    assert central_unit(full) == pytest.approx(1000 * remote)
+    split = estimate(df, basis(location_code="REMOTE", location_method="construction_share"))
+    assert central_unit(split) == pytest.approx(1000 * (1 + 0.32 * (remote - 1)))
+    own = estimate(df, basis(location_code="REMOTE", location_factor=1.20))
+    assert central_unit(own) == pytest.approx(1200)
+    log = own.log.set_index("switch")
+    assert log.loc["User location factor (overrides OPCI)", "changed"]
+    assert any("replaces OPCI" in line for line in own.location["lines"])
+
+
+def test_location_comes_from_opci_only(tmp_path):
+    assert not hasattr(F, "LOCATION_GROUPS") and not hasattr(F, "LOCATION_STEP")
+    res = estimate(load_analogs(), make_basis(location_code="ID-KAL"))
+    j = res.journey
+    for code, factor in zip(j["loc_analog_code"], j["loc_analog"]):
+        assert factor == opci.location(to=code)["factor"]
+    target = opci.location(to="ID-KAL")
+    assert j["loc_target"].eq(target["factor"]).all()
+    assert res.location["low"] == target["low"] and res.location["high"] == target["high"]
+    assert res.location["confidence"] == target["confidence"] and res.location["source"] == target["source"]
+    sens = dict(zip(res.sensitivities["sensitivity"], res.sensitivities["central"]))
+    assert f"Target location low ({target['low']:.2f}, OPCI range)" in sens
+    with pytest.raises(ValueError, match="not in the OPCI location table"):
+        analogs(tmp_path, {"location_code": "MARS"})
+
+
+def test_stand_in_locations_use_opci_remote():
+    df = load_analogs().set_index("id")
+    for aid in ("nlng_t7", "mozambique_lng", "angola_lng", "donggi_senoro", "tangguh_t3"):
+        assert df.loc[aid, "location_code"] == "REMOTE"
+        assert "stand-in until OPCI adds" in df.loc[aid, "notes"]
 
 
 # ------------------------------------------------------------- Step 6

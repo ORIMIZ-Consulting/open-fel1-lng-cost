@@ -72,9 +72,8 @@ class EstimateBasis:
     site_type: str = "greenfield"
     location_name: str = "Target site"
     target_region: str = ""
-    location_group: str = "usa"
-    location_steps: int = 0
-    location_factor: float | None = None  # overrides group and steps
+    location_code: str = "US-GC"  # OPCI location table
+    location_factor: float | None = None  # user factor: overrides OPCI, logged
     estimate_date: str | None = None  # '2029Q4'; None = latest published OPCI quarter
     report_currency: str = "USD"
     report_fx: float = 1.0  # local currency units per USD
@@ -113,9 +112,6 @@ class EstimateBasis:
     # ------------------------------------------------ Step 5: location
     location_method: str = "full"  # full | construction_share
     construction_share: float = F.CONSTRUCTION_SHARE
-    location_groups: dict[str, float] = field(
-        default_factory=lambda: {k: v[0] for k, v in F.LOCATION_GROUPS.items()}
-    )
     analog_location_overrides: dict[str, float] = field(default_factory=dict)
 
     # ------------------------------------------------ Step 6: scope and complexity
@@ -203,11 +199,16 @@ class EstimateBasis:
             "note": d["note"],
         }
 
+    def target_location(self) -> dict:
+        """OPCI factor, range, confidence and source for the target, plus any user override."""
+        loc = dict(opci_link.location(self.location_code))
+        loc["override"] = self.location_factor
+        return loc
+
     def target_location_factor(self) -> float:
         if self.location_factor is not None:
             return self.location_factor
-        base = self.location_groups.get(self.location_group, 1.0)
-        return base + F.LOCATION_STEP * self.location_steps
+        return opci_link.location(self.location_code)["factor"]
 
     def with_changes(self, **changes) -> "EstimateBasis":
         return replace(self, **changes)
@@ -222,7 +223,7 @@ PREVIEW_DEFAULTS = dict(
     apply_multi_train=False,
     gas_method="off",
     apply_co2_removal=False,
-    location_group="not_set",
+    location_code=opci_link.NOT_SET,
     use_plant_splits=True,
 )
 
@@ -241,7 +242,7 @@ def make_basis(facility_type: str = F.LIQUEFACTION, **changes) -> EstimateBasis:
 
 
 # ---------------------------------------------------------------- switch registry
-REQUIRED_INPUTS = {"purpose", "facility_type", "train_size_mtpa", "trains", "site_type", "location_group",
+REQUIRED_INPUTS = {"purpose", "facility_type", "train_size_mtpa", "trains", "site_type", "location_code",
                    "estimate_date"}
 
 # (key, step, label, source of default)
@@ -251,9 +252,8 @@ SWITCHES = [
     ("train_size_mtpa", 1, "Capacity per train (MTPA)", "Required input"),
     ("trains", 1, "Number of trains", "Required input"),
     ("site_type", 1, "Site type", "Required input"),
-    ("location_group", 1, "Location group", "Required input; OIES groups"),
-    ("location_steps", 1, "Location steps of 0.10", "Guideline step rule"),
-    ("location_factor", 1, "Location factor override", "None"),
+    ("location_code", 1, "Location (OPCI location table)", "Required input"),
+    ("location_factor", 1, "User location factor (overrides OPCI)", "None"),
     ("estimate_date", 1, "Estimate date (quarter)", "Latest published OPCI quarter"),
     ("feed_gas", 1, "Feed gas", "Lean"),
     ("co2_sequestration", 1, "CO2 sequestration at target", "No"),
@@ -282,7 +282,6 @@ SWITCHES = [
     ("index_name", 4, "User index name", "Used only when a user index is loaded"),
     ("location_method", 5, "Location method", F.OIES),
     ("construction_share", 5, "Construction share (split method)", F.OIES),
-    ("location_groups", 5, "Location group factors", F.OIES),
     ("analog_location_overrides", 5, "Analog location overrides", "None"),
     ("apply_owner_costs", 6, "Owner's costs on EPC-only figures", F.GUIDE),
     ("owner_cost_factor", 6, "Owner's cost factor", "User input; OIES uses 10%"),
