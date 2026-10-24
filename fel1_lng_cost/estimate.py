@@ -446,6 +446,12 @@ def choose_weights(rub: pd.DataFrame, sel: pd.DataFrame, b: EstimateBasis,
         raise ValueError(f"Unknown weighting '{b.weighting}'")
     w["reason"] = [b.weight_reasons.get(i, "") for i in w["id"]]
     w["dropped"] = w["id"].isin(list(b.drop_reasons))
+    # Step 8 weights flag: a weight still at the rubric suggestion that the user has not reviewed.
+    reviewed = set(b.weights_reviewed) | set(b.weights) | {i for i, r in b.weight_reasons.items() if r}
+    w["reviewed"] = w["id"].isin(reviewed)
+    flagged = (b.weighting in ("judgment", "rubric")) & (w["weight"] == w["suggested_weight"]) \
+        & ~w["reviewed"] & ~w["dropped"]
+    w["weight_flag"] = np.where(flagged, F.RUBRIC_NOT_REVIEWED, "")
     w["drop_reason"] = [b.drop_reasons.get(i, "") for i in w["id"]]
     w.loc[w["dropped"], "weight"] = 0.0
     return w
@@ -965,6 +971,19 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
 
     # Decision log and references
     log = pd.DataFrame(decision_log(b))
+    kept_rubric = core.weights[~core.weights["id"].isin(list(b.weights)) & ~core.weights["dropped"]
+                               & (core.weights["weight"] == core.weights["suggested_weight"])]
+    if b.weighting in ("judgment", "rubric") and len(kept_rubric):
+        log = pd.concat([log, pd.DataFrame([{
+            "step": 8, "switch": f"Weight for {r.id}", "setting": str(int(r.weight)),
+            "default": "Rubric suggestion", "changed": False, "source_of_default": "Rubric",
+            "reason": r.weight_flag or b.weight_reasons.get(r.id) or "Reviewed; rubric weight kept",
+            "date": b.log_date,
+        } for r in kept_rubric.itertuples()])], ignore_index=True)
+    n_flag = int((core.weights["weight_flag"] != "").sum())
+    if n_flag and b.purpose == "gate1":
+        warnings.append(f"Gate 1: {n_flag} weights are rubric suggestions you have not reviewed "
+                        f"(flagged '{F.RUBRIC_NOT_REVIEWED}').")
     if b.purpose == "gate1":
         unreviewed = int((log["reason"] == "Default accepted").sum())
         if unreviewed:

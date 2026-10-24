@@ -384,9 +384,11 @@ with tab_an:
         st.error(str(err))
         st.stop()
     st.write("Set your weight (1, 2 or 3) for each analog. A reason is required where it differs "
-             "from the rubric. Tick drop for any outlier you remove, with a reason.")
+             "from the rubric. Tick reviewed when you keep the rubric weight on purpose; otherwise it "
+             "is flagged 'rubric, not reviewed'. Tick drop for any outlier you remove, with a reason.")
     wt = pre.weights[["id", "project", "rubric_points", "suggested_weight", "value", "vs_median", "outlier"]].copy()
     wt["your_weight"] = wt["suggested_weight"]
+    wt["reviewed"] = False
     wt["reason"] = ""
     wt["drop"] = False
     wt["drop_reason"] = ""
@@ -403,6 +405,7 @@ with tab_an:
             "vs_median": st.column_config.NumberColumn("vs median", format="percent"),
             "outlier": st.column_config.CheckboxColumn("Outlier"),
             "your_weight": st.column_config.SelectboxColumn("Your weight", options=[1, 2, 3]),
+            "reviewed": st.column_config.CheckboxColumn("Reviewed"),
             "reason": st.column_config.TextColumn("Reason"),
             "drop": st.column_config.CheckboxColumn("Drop"),
             "drop_reason": st.column_config.TextColumn("Drop reason"),
@@ -415,7 +418,9 @@ with tab_an:
 weights = {r.id: int(r.your_weight) for r in edited.itertuples() if int(r.your_weight) != int(r.suggested_weight)}
 w_reasons = {r.id: r.reason for r in edited.itertuples() if str(r.reason).strip()}
 drops = {r.id: (r.drop_reason or "No reason given") for r in edited.itertuples() if r.drop}
-basis = basis.with_changes(weights=weights, weight_reasons=w_reasons, drop_reasons=drops)
+reviewed = tuple(r.id for r in edited.itertuples() if r.reviewed)
+basis = basis.with_changes(weights=weights, weight_reasons=w_reasons, drop_reasons=drops,
+                           weights_reviewed=reviewed)
 try:
     index_line.caption(f"Cost index: [Open Plant Cost Index]({opci_link.OPCI_URL}). "
                        f"{escalation_source(basis)}")
@@ -436,7 +441,7 @@ if compare:
         b_basis = basis.with_changes(
             option_name=b_name, site_type=b_site, trains=int(b_trains), train_size_mtpa=float(b_train),
             location_code=b_code, site_items=site_items if b_items else [], methods=[],
-            brownfield_shares=None, weights={}, weight_reasons={}, drop_reasons={},
+            brownfield_shares=None, weights={}, weight_reasons={}, drop_reasons={}, weights_reviewed=(),
             site_types_allowed=(b_site,) if ftype == "flng" else basis.site_types_allowed)
         res_b = estimate(df, b_basis)
         comparison = compare_options(res, res_b)
@@ -477,6 +482,11 @@ with tab_res:
     c2.metric("Simple mean", f"{s['simple_mean']:,.0f}")
     c3.metric("Median", f"{s['median']:,.0f}")
     c4.metric("Analogs used", s["count"])
+    st.dataframe(res.weights[["project", "rubric_points", "suggested_weight", "weight", "weight_flag",
+                              "reason", "weight_share", "dropped"]],
+                 hide_index=True, width=W,
+                 column_config={"weight_flag": st.column_config.TextColumn("Flag"),
+                                "weight_share": st.column_config.NumberColumn("Share", format="percent")})
 
     cases = list(res.journey["case"].unique())
     case = st.radio("Escalation case for the journey", cases, horizontal=True) if len(cases) > 1 else cases[0]

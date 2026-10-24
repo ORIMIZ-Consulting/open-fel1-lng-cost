@@ -163,7 +163,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
     # ---------------------------------------------------------- Weights
     wwt = wb.create_sheet("Weights")
     wcols = ["project", "same_region", "clean_figure", "size_close", "few_adjustments", "recent",
-             "rubric_points", "suggested_weight", "weight", "weight_share", "reason", "value",
+             "rubric_points", "suggested_weight", "weight", "weight_flag", "weight_share", "reason", "value",
              "vs_median", "outlier", "dropped", "drop_reason"]
     end = _table(wwt, r.weights[wcols], widths={"project": 36, "reason": 40})
     wwt.cell(row=end + 2, column=1, value="Weighted mean (USD/tpa)").font = BOLD

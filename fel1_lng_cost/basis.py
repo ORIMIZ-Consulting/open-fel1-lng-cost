@@ -138,6 +138,7 @@ class EstimateBasis:
     weighting: str = "judgment"  # judgment | rubric | size | equal
     weights: dict[str, int] = field(default_factory=dict)
     weight_reasons: dict[str, str] = field(default_factory=dict)
+    weights_reviewed: tuple[str, ...] = ()  # analogs whose weight the user has reviewed
     drop_reasons: dict[str, str] = field(default_factory=dict)  # drop these analogs
     outlier_threshold: float = F.OUTLIER_THRESHOLD
 

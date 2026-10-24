@@ -191,6 +191,7 @@ UTILITIES_SHARE_OF_REMAINDER = 0.60  # judgment
 # ---------------------------------------------------------------- Step 12
 CLASS_5_DEFAULT = (-0.30, 0.50)
 DEFINITION_GROWTH = (0.0, 0.15)
+RUBRIC_NOT_REVIEWED = "rubric, not reviewed"  # guideline Step 8 weights flag
 DEFAULT_ANALOG_SPREAD = (-0.15, 0.20)  # guideline Step 12 test case; used for a single analog
 CLASS_BAND_TOLERANCE = 0.02  # warn only when narrower than the class band by more than this
 CONTINGENCY_RATE = 0.15  # judgment; the guideline gives no default

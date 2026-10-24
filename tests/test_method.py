@@ -329,6 +329,24 @@ def test_rubric_and_judgment_weights(tmp_path):
     assert central_unit(res2) == pytest.approx((1000 * 3 + 1200 * 1) / 4)
 
 
+def test_unreviewed_rubric_weights_are_flagged(tmp_path):
+    df = analogs(tmp_path, {"region": "Southeast Asia"}, {"cost_amount_million": 6000}, {"cost_amount_million": 5200})
+    res = estimate(df, basis(target_region="Southeast Asia", weights={"a2": 1}, weight_reasons={"a2": "Older scope"},
+                             weights_reviewed=("a3",)))
+    flag = res.weights.set_index("id")["weight_flag"]
+    assert flag["a1"] == "rubric, not reviewed"  # still at the rubric weight, not reviewed
+    assert flag["a2"] == ""  # changed by the user, with a reason
+    assert flag["a3"] == ""  # kept at the rubric weight on purpose
+    log = res.log.set_index("switch")
+    assert log.loc["Weight for a1", "reason"] == "rubric, not reviewed"
+    assert log.loc["Weight for a3", "reason"] == "Reviewed; rubric weight kept"
+    assert log.loc["Weight for a2", "reason"] == "Older scope"
+    equal = estimate(df, basis(weighting="equal"))
+    assert equal.weights["weight_flag"].eq("").all()  # no rubric weights to flag
+    gate = estimate(df, basis(purpose="gate1"))
+    assert any("not reviewed" in w for w in gate.warnings)
+
+
 def test_outlier_flag_and_drop(tmp_path):
     df = analogs(tmp_path, {}, {"cost_amount_million": 5100}, {"cost_amount_million": 9000})
     res = estimate(df, basis(weighting="equal"))
