@@ -404,14 +404,53 @@ def test_battery_limits_remove_blocks(tmp_path):
 
 
 # ------------------------------------------------------------- Step 12
-def test_built_range_and_class_warning(tmp_path):
+def test_built_range_is_root_sum_of_squares(tmp_path):
+    df = analogs(tmp_path, {}, {"cost_amount_million": 5500})
+    res = estimate(df, basis(definition_growth=(0.0, 0.15), weighting="equal", location_code="ID-KAL"))
+    p = res.range_parts
+    band = opci_link.band()["normal"]
+    loc = opci.location(to="ID-KAL")
+    assert p["escalation_band_low"] == pytest.approx(-band) and p["escalation_band_high"] == pytest.approx(band)
+    assert p["target_location_low"] == pytest.approx(loc["low"] / loc["factor"] - 1)
+    assert p["target_location_high"] == pytest.approx(loc["high"] / loc["factor"] - 1)
+    assert "projection_low" not in p  # no projection up to the latest quarter
+    lows = [p["analog_spread_low"], 0.0, -band, p["target_location_low"]]
+    highs = [p["analog_spread_high"], 0.15, band, p["target_location_high"]]
+    assert res.low == pytest.approx(res.central * (1 - math.sqrt(sum(x * x for x in lows))))
+    assert res.high == pytest.approx(res.central * (1 + math.sqrt(sum(x * x for x in highs))))
+    # the target location range enters once; analog location ranges do not
+    assert [k for k in p if "location" in k] == ["target_location_low", "target_location_high"]
+    wide = estimate(df, basis(widen_to_class_band=True, weighting="equal"))
+    assert wide.low == pytest.approx(wide.central * 0.7) and wide.high == pytest.approx(wide.central * 1.5)
+
+
+def test_projection_cases_enter_the_range(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    res = estimate(df, basis(estimate_date="2029Q4"))
+    pr = res.escalation["projection"]
+    assert res.range_parts["projection_low"] == pytest.approx(pr["low"] / pr["mid"] - 1)
+    assert res.range_parts["projection_high"] == pytest.approx(pr["high"] / pr["mid"] - 1)
+
+
+def test_single_analog_uses_default_spread(tmp_path):
+    res = estimate(analogs(tmp_path, {}), basis())
+    assert any("Only one analog" in w for w in res.warnings)
+    assert res.range_parts["analog_spread_low"] == F.DEFAULT_ANALOG_SPREAD[0]
+    assert res.range_parts["analog_spread_high"] == F.DEFAULT_ANALOG_SPREAD[1]
+
+
+def test_class_band_warning_tolerance(tmp_path):
     df = analogs(tmp_path, {})
-    res = estimate(df, basis(definition_growth=(0.0, 0.15)))
-    assert res.low == pytest.approx(5000)
-    assert res.high == pytest.approx(5750)
-    assert any("narrower than the class band" in w for w in res.warnings)
-    wide = estimate(df, basis(widen_to_class_band=True))
-    assert wide.low == pytest.approx(3500) and wide.high == pytest.approx(7500)
+    first = estimate(df, basis(definition_growth=(0.0, 0.15)))
+    lo, hi = first.low / first.central - 1, first.high / first.central - 1
+
+    def warned(class_low, class_high):
+        r = estimate(df, basis(definition_growth=(0.0, 0.15), class_low=class_low, class_high=class_high))
+        return any("narrower than the class band" in w for w in r.warnings)
+
+    assert not warned(lo - 0.015, hi + 0.015)  # within 2 points at both ends
+    assert warned(lo - 0.025, hi)  # low end more than 2 points narrower
+    assert warned(lo, hi + 0.025)  # high end more than 2 points narrower
 
 
 def test_contingency_only_for_missing_share(tmp_path):
@@ -431,6 +470,19 @@ def test_correlated_comparison(tmp_path):
     assert c["central_difference"] == pytest.approx(b.central - a.central)
     assert c["low"] <= c["central_difference"] <= c["high"]
     assert c["high"] < 0  # brownfield is cheaper in every shared case
+
+
+def test_saving_cap_at_most_optimistic_method(tmp_path):
+    df = analogs(tmp_path, {}, {"cost_amount_million": 5500})
+    a = estimate(df, basis(weighting="equal"))
+    shares = BrownfieldShares(0.5, 0.5, 0.0, 0.0)
+    b = estimate(df, basis(weighting="equal", site_type="brownfield", option_name="B",
+                           brownfield_shares=shares, method_gap_note="x"))
+    assert len(b.methods) == 2
+    c = compare_options(a, b)
+    best = a.central - b.methods["value"].min()  # saving from B's most optimistic method
+    assert c["saving_cap"] == pytest.approx(-best)
+    assert -c["low"] <= best + 1e-9  # the largest saving never exceeds it
 
 
 # ------------------------------------------------------------- Step 13

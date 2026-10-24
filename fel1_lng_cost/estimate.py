@@ -850,12 +850,18 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
     high_case = float(core.cases["base"].max())
     s_low = float(core.cases["spread_low"].mean())
     s_high = float(core.cases["spread_high"].mean())
-    g_low, g_high = b.definition_growth
+    if core.stats["count"] == 1:
+        s_low, s_high = F.DEFAULT_ANALOG_SPREAD
+        warnings.append(f"Only one analog: the default analog spread ({s_low:+.0%} / {s_high:+.0%}) "
+                        "is used. Add analogs if you can.")
     opp = float(core.register["opportunity"].sum())
     risk = float(core.register["risk"].sum())
     shift = central - analog_central  # a chosen variant method moves the range with it
-    built_low = (low_case + shift) * (1 + s_low + g_low) + opp
-    built_high = (high_case + shift) * (1 + s_high + g_high) + risk
+    uncertainties = named_uncertainties(b, core, (s_low, s_high))
+    dev_low = -math.sqrt(sum(u["low"] ** 2 for u in uncertainties))
+    dev_high = math.sqrt(sum(u["high"] ** 2 for u in uncertainties))
+    built_low = central * (1 + dev_low) + opp
+    built_high = central * (1 + dev_high) + risk
     band_low = central * (1 + b.class_low)
     band_high = central * (1 + b.class_high)
     if b.range_method == "class_band":
@@ -866,7 +872,8 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         low, high = built_low, built_high
     mvals = [m.value for m in methods]
     low, high = min(low, min(mvals)), max(high, max(mvals))
-    narrower = low > band_low or high < band_high
+    tol = F.CLASS_BAND_TOLERANCE
+    narrower = low / central - 1 > b.class_low + tol or high / central - 1 < b.class_high - tol
     if b.range_method != "class_band" and narrower:
         if b.widen_to_class_band:
             low, high = min(low, band_low), max(high, band_high)
@@ -877,13 +884,16 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
                 f"class band ({b.class_low:+.0%} / {b.class_high:+.0%}). Widen it, or record why this "
                 "project is better defined than a typical Class 5."
             )
-    range_parts = {
-        "low_case": low_case, "high_case": high_case, "analog_spread_low": s_low,
-        "analog_spread_high": s_high, "definition_growth_low": g_low,
-        "definition_growth_high": g_high, "site_opportunities": opp, "site_risks": risk,
+    range_parts = {"low_case": low_case, "high_case": high_case}
+    for u in uncertainties:
+        range_parts[f"{u['key']}_low"] = u["low"]
+        range_parts[f"{u['key']}_high"] = u["high"]
+    range_parts.update({
+        "combined_low": dev_low, "combined_high": dev_high,
+        "site_opportunities": opp, "site_risks": risk,
         "class_band_low": band_low, "class_band_high": band_high,
         "built_low": built_low, "built_high": built_high, "method": b.range_method,
-    }
+    })
 
     # Step 11: blocks for the final base
     # Blocks sum to the analog central; a chosen variant method rescales them.
@@ -1035,22 +1045,53 @@ def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: p
     return out
 
 
+# ================================================================ Step 12: named uncertainties
+def named_uncertainties(b: EstimateBasis, core: _Core, spread: tuple[float, float]) -> list[dict]:
+    """Each named uncertainty as a relative low and high change on the central value.
+
+    Combined by root sum of squares. Only the target location range enters;
+    errors in the analog location factors already show in the analog spread.
+    """
+    out = [
+        {"key": "analog_spread", "name": "Analog spread", "low": spread[0], "high": spread[1]},
+        {"key": "definition_growth", "name": "Definition growth",
+         "low": b.definition_growth[0], "high": b.definition_growth[1]},
+    ]
+    how = core.cases.iloc[0]["method"]
+    if how == "opci":
+        w = core.weights.set_index("id")["weight_share"]
+        j = core.journey.set_index("id")["esc_band"]
+        band = float((j.reindex(w.index) * w).sum() / w.sum())
+        out.append({"key": "escalation_band", "name": "Escalation band (OPCI back-test)",
+                    "low": -band, "high": band})
+    proj = projection(b, how)
+    if proj:
+        out.append({"key": "projection", "name": "Projection low and high",
+                    "low": proj["low"] / proj["mid"] - 1, "high": proj["high"] / proj["mid"] - 1})
+    loc = b.target_location()
+    if loc["low"] != loc["high"]:
+        rel_low, rel_high = loc["low"] / loc["factor"], loc["high"] / loc["factor"]
+        f = b.target_location_factor()
+        effect = _location_effect(f, b)
+        out.append({"key": "target_location", "name": "Target location range (OPCI)",
+                    "low": _location_effect(f * rel_low, b) / effect - 1,
+                    "high": _location_effect(f * rel_high, b) / effect - 1})
+    return out
+
+
 # ================================================================ Step 12: comparing options
 def compare_options(a: EstimateResult, b: EstimateResult) -> dict:
     """Range the difference B - A with shared drivers held together.
 
-    Escalation case, analog spread and definition growth move both options
-    together. Site items that appear in only one option do not.
+    The named uncertainties (analog level, definition growth, escalation,
+    projection and location) move both options together, so they scale the
+    difference. Site items that appear in only one option do not.
+    Saving cap: when B is the cheaper variant and has more than one method,
+    the largest saving is capped at the saving from B's most optimistic method.
     """
-    pa, pb = a.range_parts, b.range_parts
-    shift_a = a.central - (pa["low_case"] + pa["high_case"]) / 2
-    shift_b = b.central - (pb["low_case"] + pb["high_case"]) / 2
-    diffs = []
-    for case_a, case_b in ((pa["low_case"], pb["low_case"]), (pa["high_case"], pb["high_case"])):
-        d = (case_b + shift_b) - (case_a + shift_a)
-        for spread, growth in ((pa["analog_spread_low"], pa["definition_growth_low"]),
-                               (pa["analog_spread_high"], pa["definition_growth_high"])):
-            diffs.append(d * (1 + spread + growth))
+    pa = a.range_parts
+    d = b.central - a.central
+    diffs = [d * (1 + pa["combined_low"]), d * (1 + pa["combined_high"])]
 
     def unique(r1, r2):
         """Site items in r1 that r2 does not share (same name and values)."""
@@ -1064,11 +1105,21 @@ def compare_options(a: EstimateResult, b: EstimateResult) -> dict:
     ua, ub = unique(a, b), unique(b, a)
     low = min(diffs) + ub["opportunity"].sum() - ua["risk"].sum()
     high = max(diffs) + ub["risk"].sum() - ua["opportunity"].sum()
+    cap = None
+    if d < 0 and len(b.methods) > 1:
+        cap = float(b.methods["value"].min()) - a.central
+        low = max(low, cap)
     overlap = not (a.high < b.low or b.high < a.low)
+    notes = []
+    if overlap:
+        notes.append("Two overlapping ranges do not mean the difference might be zero; "
+                     "read the correlated difference instead.")
+    if cap is not None and math.isclose(low, cap):
+        notes.append(f"The largest saving is capped at {-cap:,.0f}, the saving from "
+                     f"{b.basis.option_name}'s most optimistic method.")
     return {
         "option_a": a.basis.option_name, "option_b": b.basis.option_name,
-        "central_difference": b.central - a.central, "low": float(low), "high": float(high),
+        "central_difference": d, "low": float(low), "high": float(high), "saving_cap": cap,
         "independent_ranges_overlap": overlap,
-        "note": ("Two overlapping ranges do not mean the difference might be zero; "
-                 "read the correlated difference instead.") if overlap else "",
+        "note": " ".join(notes),
     }

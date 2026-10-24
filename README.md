@@ -50,7 +50,7 @@ To use it from Python, see `examples/example_estimate.py`. It compares a greenfi
 | 9. Site items | A register of site items. Each one is added to the base, carried as a risk or opportunity, or noted, by the guideline's decision tree and materiality threshold. Helpers for tanks and dredging. |
 | 10. Variants | Other methods for the same option, the rule for choosing the base, and a block-by-block brownfield method. |
 | 11. Cost blocks | By cost type (OIES) and by area. Items outside the battery limits are removed by block. |
-| 12. Range | Built from the escalation cases, the analog spread, definition growth and site risks, then checked against the class band. Contingency only for the share of weight not on sanctioned budgets. Correlated comparison of two options. |
+| 12. Range | Named uncertainties combined by root sum of squares: analog spread, definition growth, escalation band, projection low and high (when projected) and the target location range. Site risks and opportunities are added on top. A single analog gets the default spread (−15% / +20%) and a warning. Checked against the class band, with a 2-point tolerance. Contingency only for the share of weight not on sanctioned budgets. Correlated comparison of two options, with the saving capped at the variant's most optimistic method. |
 | 13. Outputs | Summary, analog journey table and chart, escalation chart, size curve, weights panel, cost blocks, risk register, range chart, sensitivities, decision log, references, and an Excel workbook with all of them. |
 
 `fel1_lng_cost/factors.py` lists every default with its source. Defaults that rest on judgment say so.
