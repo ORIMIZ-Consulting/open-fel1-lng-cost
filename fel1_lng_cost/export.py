@@ -19,7 +19,7 @@ BOLD = Font(bold=True)
 
 DISCLAIMER = (
     "FEL 1 (AACE Class 5) screening estimate from public analog projects, following the "
-    "FEL 1 LNG Capital Cost Estimating Guideline v0.1. The range is a set of reasoned bounds, "
+    "FEL 1 LNG Capital Cost Estimating Guideline v0.2. The range is a set of reasoned bounds, "
     "not a statistical P10 and P90. Not for budget authorisation or an investment decision."
 )
 
@@ -175,18 +175,25 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
 
     # ---------------------------------------------------------- Escalation
     we = wb.create_sheet("Escalation")
-    end = _table(we, r.cases)
-    if len(r.cases) > 1:
-        pivot = r.journey.pivot_table(index="project", columns="case", values="u_final").reset_index()
-        start = end + 2
-        end2 = _table(we, pivot, start_row=start, widths={"project": 36})
-        bc = BarChart()
-        bc.title = "Escalation cases per analog (USD per tpa)"
-        bc.height, bc.width = 10, 24
-        bc.add_data(Reference(we, min_col=2, max_col=pivot.shape[1], min_row=start, max_row=end2),
-                    titles_from_data=True)
-        bc.set_categories(Reference(we, min_col=1, min_row=start + 1, max_row=end2))
-        we.add_chart(bc, f"E{start}")
+    we.cell(row=1, column=1, value="Escalation panel: factor per analog").font = BOLD
+    row = 1
+    for line in r.escalation.get("lines", []) + r.escalation_panel_notes():
+        row += 1
+        we.cell(row=row, column=1, value=line).alignment = Alignment(wrap_text=True)
+        we.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+    panel = r.escalation_panel()
+    start = row + 2
+    end = _table(we, panel, start_row=start, widths={"project": 36})
+    bc = BarChart()
+    bc.type, bc.grouping, bc.overlap = "bar", "stacked", 100
+    bc.title = "Escalation factor per analog: published data and projection"
+    bc.height, bc.width = 10, 24
+    for col in ("f_published", "projection_part"):
+        j = list(panel.columns).index(col) + 1
+        bc.add_data(Reference(we, min_col=j, min_row=start, max_row=end), titles_from_data=True)
+    bc.set_categories(Reference(we, min_col=1, min_row=start + 1, max_row=end))
+    we.add_chart(bc, f"L{start}")
+    end = _table(we, r.cases, start_row=end + 3)
     if len(r.calibration):
         start = we.max_row + 3
         we.cell(row=start - 1, column=1, value="Calibration diagnostic (report only)").font = BOLD

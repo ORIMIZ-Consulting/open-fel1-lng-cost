@@ -267,11 +267,13 @@ def normalize(sel: pd.DataFrame, b: EstimateBasis, how: str, exponent: float,
         f_esc = f_pub * f_proj
         rec.update(f_published=f_pub, f_projection=f_proj, f_esc=f_esc)
         rec["esc_band"] = float("nan")
+        rec["supply_shock"] = False
         if band is not None:
             shock_dates = opci_link.is_shock_year(r["cost_year"]) or opci_link.is_shock_year(target[:4])
             rec["esc_band"] = band["shock"] if shock_dates else band["normal"]
             shock = opci_link.supply_shock_note(int(r["cost_year"]), target)
             if shock:
+                rec["supply_shock"] = True
                 notes.append(shock)
         u *= f_esc
         rec["u_escalated"] = u
@@ -773,6 +775,26 @@ class EstimateResult:
     def unit_cost(self) -> float:
         return self.central / self.basis.capacity_mtpa
 
+    def escalation_panel(self) -> pd.DataFrame:
+        """Step 13 escalation panel: each analog's factor, split into published part and
+        projection, with its band and supply-shock flag."""
+        j = self.journey.merge(self.pool[["id", "cost_year"]], on="id")
+        p = j[["project", "cost_year", "f_published", "f_projection", "f_esc", "esc_band", "supply_shock"]].copy()
+        p["projection_part"] = p["f_esc"] - p["f_published"]  # bar segment above the published part
+        p["band_low"] = p["f_esc"] * (1 - p["esc_band"].fillna(0.0))
+        p["band_high"] = p["f_esc"] * (1 + p["esc_band"].fillna(0.0))
+        return p.sort_values("f_esc").reset_index(drop=True)
+
+    def escalation_panel_notes(self) -> list[str]:
+        """Band and supply-shock lines that go with the escalation panel."""
+        out = []
+        if self.cases.iloc[0]["method"] == "opci":
+            bd = opci_link.band(self.basis.opci_release)
+            out.append(f"Escalation band from the OPCI back-test: about +/-{bd['normal']:.1%}, and about "
+                       f"+/-{bd['shock']:.1%} when the analog or estimate date is in 2021 or 2022.")
+        out += [n for n in self.notes if n == opci_link.supply_shock_note(2021, 2021)]
+        return out
+
     def in_report_currency(self, value: float) -> float:
         return value * self.basis.report_fx
 
@@ -972,6 +994,15 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
 
     # Decision log and references
     log = pd.DataFrame(decision_log(b))
+    stamp = opci_link.stamp(b.opci_release)
+    log = pd.concat([log, pd.DataFrame([
+        {"step": 4, "switch": "OPCI version", "setting": stamp["version"], "default": "Installed version",
+         "changed": False, "source_of_default": F.OPCI, "reason": "Recorded with every result", "date": b.log_date},
+        {"step": 4, "switch": "OPCI data release used", "setting": stamp["data_release"],
+         "default": "Latest data release", "changed": stamp["frozen"], "source_of_default": F.OPCI,
+         "reason": ("Frozen on a named release" if stamp["frozen"] else "Latest release (not frozen)"),
+         "date": b.log_date},
+    ])], ignore_index=True)
     kept_rubric = core.weights[~core.weights["id"].isin(list(b.weights)) & ~core.weights["dropped"]
                                & (core.weights["weight"] == core.weights["suggested_weight"])]
     if b.weighting in ("judgment", "rubric") and len(kept_rubric):

@@ -66,3 +66,16 @@ def test_opci_stamp_on_export():
     values = {ws.cell(row=i, column=1).value: ws.cell(row=i, column=2).value
               for i in range(1, ws.max_row + 1)}
     assert values["Cost index"] == label
+    esc = load_workbook(BytesIO(to_excel_bytes(res)))["Escalation"]
+    assert esc["A1"].value == "Escalation panel: factor per analog"
+    assert len(esc._charts) == 1
+
+
+def test_no_public_file_names_the_indonesian_site():
+    """Worked examples call it "an existing LNG hub" (decided 24 October 2026)."""
+    root = Path(__file__).resolve().parent.parent
+    files = [p for p in root.rglob("*") if p.is_file() and p.suffix in (".py", ".md", ".csv")
+             and ".git" not in p.parts and not p.name.startswith("private_")]
+    assert files
+    for p in files:
+        assert "bon" + "tang" not in p.read_text(encoding="utf-8", errors="ignore").lower(), p

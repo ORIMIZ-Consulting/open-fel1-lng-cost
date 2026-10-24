@@ -524,6 +524,37 @@ def test_decision_log_includes_defaults(tmp_path):
     assert (log["date"] != "").all()
 
 
+def test_escalation_panel_split_band_and_shock(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015}, {"cost_year": 2021, "fid_year": 2021})
+    res = estimate(df, basis(estimate_date="2029Q4", fid_window_years=None))
+    p = res.escalation_panel().set_index("cost_year")
+    proj = res.escalation["projection"]
+    assert p.loc[2015, "f_esc"] == pytest.approx(p.loc[2015, "f_published"] * proj["mid"])
+    assert p.loc[2015, "projection_part"] == pytest.approx(p.loc[2015, "f_esc"] - p.loc[2015, "f_published"])
+    bd = opci_link.band()
+    assert p.loc[2015, "esc_band"] == bd["normal"] and p.loc[2021, "esc_band"] == bd["shock"]
+    assert p.loc[2021, "supply_shock"] and not p.loc[2015, "supply_shock"]
+    assert p.loc[2021, "band_high"] == pytest.approx(p.loc[2021, "f_esc"] * (1 + bd["shock"]))
+    notes = res.escalation_panel_notes()
+    assert any("back-test" in n for n in notes) and SUPPLY_SHOCK_NOTE in notes
+
+
+def test_decision_log_records_opci(tmp_path):
+    df = analogs(tmp_path, {})
+    log = estimate(df, basis()).log.set_index("switch")
+    assert log.loc["OPCI version", "setting"] == opci.__version__
+    assert log.loc["OPCI data release used", "setting"] == opci_link.latest_release()
+    assert log.loc["OPCI data release (freeze switch)", "setting"] == "Latest"
+    name = opci_link.releases()[0]
+    frozen = estimate(df, basis(opci_release=name)).log.set_index("switch")
+    assert frozen.loc["OPCI data release (freeze switch)", "setting"] == name
+    assert frozen.loc["OPCI data release used", "reason"] == "Frozen on a named release"
+
+
+def test_guideline_labels_are_v02():
+    assert F.GUIDE.endswith("v0.2")
+
+
 def test_preview_types_switch_off_liquefaction_factors():
     df = load_analogs()
     res = estimate(df, make_basis("flng", train_size_mtpa=2.5, site_type="conversion"))

@@ -31,15 +31,23 @@ def journey_chart(r: EstimateResult, case: str | None = None) -> go.Figure:
     return _layout(fig, 480, title=f"Analog journey ({case} escalation case)", yaxis_title="USD per tpa")
 
 
-def escalation_chart(r: EstimateResult) -> go.Figure | None:
-    if r.journey["case"].nunique() < 2:
-        return None
-    p = r.journey.pivot_table(index="project", columns="case", values="u_final").reset_index()
+def escalation_chart(r: EstimateResult) -> go.Figure:
+    """Escalation panel: factor per analog, published part and projection, with the band."""
+    p = r.escalation_panel()
+    label = p["project"] + " (" + p["cost_year"].astype(str) + p["supply_shock"].map({True: ", shock", False: ""}) + ")"
     fig = go.Figure()
-    for case in [c for c in p.columns if c != "project"]:
-        fig.add_trace(go.Bar(y=p["project"], x=p[case], name=case, orientation="h"))
-    return _layout(fig, max(300, 28 * len(p) + 100), barmode="group",
-                   title="Escalation cases per analog", xaxis_title="USD per tpa")
+    fig.add_trace(go.Bar(y=label, x=p["f_published"], name="Published data", orientation="h",
+                         marker_color=INK))
+    if (p["projection_part"].abs() > 1e-12).any():
+        fig.add_trace(go.Bar(y=label, x=p["projection_part"], name="Projection", orientation="h",
+                             marker_color="#9DB4CF"))
+    if p["esc_band"].notna().any():
+        fig.add_trace(go.Scatter(
+            y=label, x=p["f_esc"], mode="markers", name="Escalation band", marker=dict(color="#C0392B", size=6),
+            error_x=dict(type="data", symmetric=False, array=p["band_high"] - p["f_esc"],
+                         arrayminus=p["f_esc"] - p["band_low"])))
+    return _layout(fig, max(300, 28 * len(p) + 120), barmode="stack",
+                   title="Escalation factor per analog", xaxis_title="Factor to the estimate date")
 
 
 def size_chart(r: EstimateResult) -> go.Figure:

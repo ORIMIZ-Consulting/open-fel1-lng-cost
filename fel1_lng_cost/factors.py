@@ -20,7 +20,7 @@ OIES_URL = (
 )
 AACE = "AACE International Recommended Practice 18R-97"
 KBR = "KBR (2007), LNG Liquefaction: Not All Plants Are Created Equal, adjusted by OIES"
-GUIDE = "FEL 1 LNG Capital Cost Estimating Guideline v0.1"
+GUIDE = "FEL 1 LNG Capital Cost Estimating Guideline v0.2"
 JUDGMENT = "Judgment (no public source)"
 
 # ---------------------------------------------------------------- facility types

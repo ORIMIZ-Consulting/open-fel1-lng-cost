@@ -28,7 +28,7 @@ st.set_page_config(page_title="FEL1 LNG Cost", layout="wide")
 st.title("FEL1 LNG cost from analogs")
 st.caption(
     "Concept-stage (AACE Class 5) capital cost for LNG plants from public analog projects, "
-    "following the FEL 1 LNG Capital Cost Estimating Guideline v0.1. Every method choice is a "
+    "following the FEL 1 LNG Capital Cost Estimating Guideline v0.2. Every method choice is a "
     "switch, and every switch goes into the decision log."
 )
 index_line = st.empty()
@@ -498,9 +498,9 @@ with tab_res:
     fe = res.fitted_exponent
     c1.caption(f"Fitted n = {fe['n']:.2f} (R2 = {fe['r2']:.2f}, {fe['count']} analogs). Shown only; "
                "the guideline takes n from practice.")
-    esc_fig = charts.escalation_chart(res)
-    if esc_fig:
-        c2.plotly_chart(esc_fig, width=W)
+    c2.plotly_chart(charts.escalation_chart(res), width=W)
+    for line in res.escalation_panel_notes():
+        c2.caption(line)
     if len(res.calibration):
         c2.write("Calibration diagnostic (Step 4, report only; it does not change the estimate):")
         c2.dataframe(res.calibration.round(3), hide_index=True, width=W)

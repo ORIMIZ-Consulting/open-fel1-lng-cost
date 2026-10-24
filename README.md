@@ -4,7 +4,7 @@ Maintained by ORIMIZ Consulting.
 
 A free tool for a first capital cost estimate of a liquefied natural gas (LNG) liquefaction plant, at Front-End Loading 1 (FEL 1), the concept stage. It works from past projects with published costs, called **analogs**.
 
-The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.2](docs/GUIDELINE.md). Version 0.2 takes escalation and location from the [Open Plant Cost Index (OPCI)](https://github.com/ORIMIZ-Consulting/open-plant-cost-index). The code is being moved to version 0.2 one step at a time. Until that work is done, the step table below describes the tool as it runs today. The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
+The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.2](docs/GUIDELINE.md). Version 0.2 takes escalation and location from the [Open Plant Cost Index (OPCI)](https://github.com/ORIMIZ-Consulting/open-plant-cost-index). The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
 
 > **Use with care.** The result is an Association for the Advancement of Cost Engineering (AACE) Class 5 estimate: good for screening ideas, comparing concepts and supporting a Gate 1 decision. It is not a budget, and it must not be used for an investment decision. The range is a set of reasoned bounds, not a statistical P10 and P90.
 
@@ -51,7 +51,7 @@ To use it from Python, see `examples/example_estimate.py`. It compares a greenfi
 | 10. Variants | Other methods for the same option, the rule for choosing the base, and a block-by-block brownfield method. |
 | 11. Cost blocks | By cost type (OIES) and by area. Items outside the battery limits are removed by block. Storage and marine splits one third tank, two thirds jetty and marine (judgment). |
 | 12. Range | Named uncertainties combined by root sum of squares: analog spread, definition growth, escalation band, projection low and high (when projected) and the target location range. Site risks and opportunities are added on top. A single analog gets the default spread (−15% / +20%) and a warning. Checked against the class band, with a 2-point tolerance. Contingency only for the share of weight not on sanctioned budgets. Correlated comparison of two options, with the saving capped at the variant's most optimistic method. |
-| 13. Outputs | Summary, analog journey table and chart, escalation chart, size curve, weights panel, cost blocks, risk register, range chart, sensitivities, decision log, references, and an Excel workbook with all of them. |
+| 13. Outputs | Summary (with OPCI version and data release, and the reference line), analog journey table and chart, escalation panel (published part, projection, band and supply-shock note per analog), size curve, weights panel, cost blocks, risk register, range chart, sensitivities, decision log, references, and an Excel workbook with all of them. |
 
 `fel1_lng_cost/factors.py` lists every default with its source. Defaults that rest on judgment say so.
 
