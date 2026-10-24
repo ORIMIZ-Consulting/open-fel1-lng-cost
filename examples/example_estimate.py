@@ -1,7 +1,7 @@
 """Example: two 4.5 MTPA trains at a remote Southeast Asian site, greenfield
 against a brownfield variant, in 2026 US dollars.
 
-Run from the fel1-lng-cost folder:
+Run from the repository root folder:
     python examples/example_estimate.py
 """
 import sys
