@@ -544,9 +544,10 @@ def battery_limit_removal(blocks: dict[str, float], b: EstimateBasis) -> dict[st
         out["Utilities and offsites"] = blocks["Utilities and offsites"]
     if "site_works" not in bl:
         out["Site works and infrastructure"] = blocks["Site works and infrastructure"]
-    sm_share = (0.5 if "tanks" not in bl else 0.0) + (0.5 if "marine" not in bl else 0.0)
+    tank = F.TANK_SHARE_OF_STORAGE_MARINE
+    sm_share = (tank if "tanks" not in bl else 0.0) + (1 - tank if "marine" not in bl else 0.0)
     if sm_share and blocks["Storage and marine"]:
-        out["Storage and marine"] = sm_share * blocks["Storage and marine"]  # 50/50 split: judgment
+        out["Storage and marine"] = sm_share * blocks["Storage and marine"]
     return out
 
 

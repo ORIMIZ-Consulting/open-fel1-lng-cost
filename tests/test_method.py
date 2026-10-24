@@ -421,6 +421,17 @@ def test_battery_limits_remove_blocks(tmp_path):
     assert res.central == pytest.approx(5000 * (1 - 0.072))
 
 
+def test_storage_and_marine_split_one_third_tank(tmp_path):
+    df = analogs(tmp_path, {})
+    full = estimate(df, basis()).blocks_by_area.set_index("block").loc["Storage and marine", "usd_million"]
+    assert full == pytest.approx(5000 * 0.9 * 0.08)  # 8% of EPC
+    all_in = ("trains", "utilities", "tanks", "marine", "site_works", "owners_costs")
+    no_tank = estimate(df, basis(battery_limits=tuple(x for x in all_in if x != "tanks")))
+    no_marine = estimate(df, basis(battery_limits=tuple(x for x in all_in if x != "marine")))
+    assert no_tank.central == pytest.approx(5000 - full / 3)
+    assert no_marine.central == pytest.approx(5000 - full * 2 / 3)
+
+
 # ------------------------------------------------------------- Step 12
 def test_built_range_is_root_sum_of_squares(tmp_path):
     df = analogs(tmp_path, {}, {"cost_amount_million": 5500})

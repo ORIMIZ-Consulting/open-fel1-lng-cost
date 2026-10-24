@@ -186,6 +186,8 @@ COST_TYPE_SHARES = {
 }
 PROCESS_SHARE_OF_EPC = 0.50  # OIES
 STORAGE_MARINE_SHARE_OF_EPC = 0.08  # guideline test case; judgment
+# Split within the storage and marine block: one third tank, two thirds jetty and marine.
+TANK_SHARE_OF_STORAGE_MARINE = 1 / 3  # guideline Step 11; judgment
 UTILITIES_SHARE_OF_REMAINDER = 0.60  # judgment
 
 # ---------------------------------------------------------------- Step 12
@@ -222,6 +224,7 @@ FACTOR_REFERENCES = [
     ("Storage tank about USD 200m per 180,000 m3", TANK_REFERENCE["source"], ""),
     ("Dredging USD 15 to 30 per m3", "Cuyutlan (Dredging Today, 2010); Soyo (SWZ Maritime, 2010)", ""),
     ("Storage and marine 8% of EPC; utilities 60% of remainder", JUDGMENT, ""),
+    ("Storage and marine split: one third tank, two thirds jetty and marine", GUIDE + "; judgment", ""),
     ("Contingency rate 15% for the non-budget share", JUDGMENT, ""),
     ("Rubric points to weight: 0-1 = 1, 2-3 = 2, 4-5 = 3", JUDGMENT + " (tool's mapping)", ""),
 ]
