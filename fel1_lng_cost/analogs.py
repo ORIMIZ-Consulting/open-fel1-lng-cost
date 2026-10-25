@@ -136,7 +136,7 @@ def load_analogs(*paths, include_public: bool = True) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = default
     for col in ("split_source", "epc_contractor", "notes"):
-        df[col] = df[col].fillna("").astype(str)
+        df[col] = df[col].astype("string").fillna("").astype(str)  # empty columns read as float
     df["process_family"] = df["process_family"].fillna("not_stated")
     df["contracting_basis"] = df["contracting_basis"].fillna("unknown")
     df["data_quality"] = df["data_quality"].fillna("C")
