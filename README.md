@@ -73,7 +73,7 @@ Each row records the guideline's Step 2 fields: project, country, site type, tra
 Points to know:
 
 - **Money year.** For OIES figures that are final or latest costs, the money year is the middle of construction. This is a judgment, noted in each row.
-- **Location.** Each analog has an OPCI location code. Nigeria LNG Train 7, Mozambique LNG, Angola LNG, Donggi-Senoro and Tangguh Train 3 use OPCI's generic REMOTE as a stand-in until OPCI adds their locations. Each of these rows says so.
+- **Location.** Each analog has an OPCI location code. Since OPCI 1.1.0, Nigeria LNG Train 7, Mozambique LNG, Angola LNG, Donggi-Senoro and Tangguh Train 3 have their own codes (NG-BON, MZ-AFU, AO-SOY, ID-SUL and ID-PAP).
 - **Site type.** Liquefaction added to an existing import terminal is treated as brownfield, as OIES does. Donggi-Senoro and LNG Canada are treated as partly brownfield (built on existing industrial sites).
 - **Process family, FID year and contractor** are from public record, not always from the cost source. Rows marked "check" deserve a second look.
 - **Exchange rates** for the euro and Singapore dollar rows are approximate yearly averages.

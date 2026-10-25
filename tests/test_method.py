@@ -257,11 +257,14 @@ def test_location_comes_from_opci_only(tmp_path):
         analogs(tmp_path, {"location_code": "MARS"})
 
 
-def test_stand_in_locations_use_opci_remote():
+def test_former_stand_ins_use_their_own_opci_codes():
     df = load_analogs().set_index("id")
-    for aid in ("nlng_t7", "mozambique_lng", "angola_lng", "donggi_senoro", "tangguh_t3"):
-        assert df.loc[aid, "location_code"] == "REMOTE"
-        assert "stand-in until OPCI adds" in df.loc[aid, "notes"]
+    codes = {"nlng_t7": "NG-BON", "mozambique_lng": "MZ-AFU", "angola_lng": "AO-SOY",
+             "donggi_senoro": "ID-SUL", "tangguh_t3": "ID-PAP"}
+    for aid, code in codes.items():
+        assert df.loc[aid, "location_code"] == code
+        assert opci.location(to=code)["factor"] > 0
+        assert "stand-in" not in df.loc[aid, "notes"]
 
 
 # ------------------------------------------------------------- Step 6
