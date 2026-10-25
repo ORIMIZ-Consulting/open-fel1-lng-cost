@@ -6,6 +6,18 @@ Version 0.2, 24 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft 
 
 **What changed from version 0.1:** escalation and location now come from the Open Plant Cost Index (OPCI), a free index built from public domain data (decisions D1 to D5, 24 October 2026). The estimate date is entered by the user, usually the expected FID date, and any part beyond published data is shown as a projection. The two escalation cases are replaced by one data-based case with a band. Storage and marine default split, a weights flag, a saving cap and a class-band tolerance are added.
 
+## Decisions behind version 0.2
+
+The owner agreed these decisions on 24 October 2026.
+
+| # | Decision |
+| --- | --- |
+| D1 | OPCI installed as `opci>=1.0,<2.0`; latest data release stamped on every result; freeze switch; Dependabot weekly; user index file overrides; location factors from OPCI only |
+| D2 | Single escalation case (full OPCI change); back-test band ±5.5% (±9% for 2021 and 2022 analogs); half-change low case retired; review with OPCI LNG weights (version 1.1) |
+| D3 | Estimate date input with a final investment decision (FID) prompt; published data then labelled projection; split shown; reference line in today's money; spend profile parked for FEL 2 and Class 3 |
+| D4 | Projection rates from data held in OPCI (International Monetary Fund (IMF) forecast plus OPCI real escalation), labelled stopgap until then, user override |
+| D5 | Only the target location range is added to the estimate range; single-analog warning |
+
 ---
 
 ## 1. Purpose and scope
