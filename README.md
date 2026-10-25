@@ -61,7 +61,7 @@ To use it from Python, see `examples/example_estimate.py`. It compares a greenfi
 
 | Facility | Projects | FID years | With a plant-only split |
 |---|---|---|---|
-| Onshore liquefaction | 31 | 2007 to 2025 | 21 |
+| Onshore liquefaction | 31 | 2007 to 2025 | 20 |
 | FLNG | 9 | 2011 to 2025 | 5 |
 | Onshore regas | 4 | 2007 to 2017 | 0 |
 | FSRU | 1 | 2022 | 0 |
