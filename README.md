@@ -110,6 +110,7 @@ By default the tool escalates with OPCI, which installs with the tool. The Chemi
 | `docs/GUIDELINE.md` | The estimating guideline (version 0.2) |
 | `examples/example_estimate.py` | Greenfield against brownfield, in Python |
 | `tests/` | Automatic checks. Run `pytest` |
+| `requirements.txt` | Libraries to install. It reads `requirements/opci.txt` for OPCI |
 
 ## Known limits
 

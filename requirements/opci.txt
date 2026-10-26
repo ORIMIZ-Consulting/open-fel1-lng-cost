@@ -1,0 +1,2 @@
+# Open Plant Cost Index. Kept in its own file so Dependabot checks it weekly.
+opci>=1.0,<2.0

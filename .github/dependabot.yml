@@ -1,6 +1,21 @@
 version: 2
 updates:
+  # General libraries: one grouped pull request a month. opci is left out here.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "opci"
+    groups:
+      general-libraries:
+        patterns:
+          - "*"
+
+  # Open Plant Cost Index (opci): checked weekly, on its own.
+  - package-ecosystem: "pip"
+    directory: "/requirements"
+    schedule:
       interval: "weekly"
+    allow:
+      - dependency-name: "opci"
