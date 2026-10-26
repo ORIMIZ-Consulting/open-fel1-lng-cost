@@ -1,12 +1,15 @@
 version: 2
 updates:
   # General libraries: one grouped pull request a month. opci is left out here.
+  # Major versions are skipped, so the minimums keep Python 3.10 working.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "monthly"
     ignore:
       - dependency-name: "opci"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       general-libraries:
         patterns:
