@@ -20,7 +20,7 @@ OIES_URL = (
 )
 AACE = "AACE International Recommended Practice 18R-97"
 KBR = "KBR (2007), LNG Liquefaction: Not All Plants Are Created Equal, adjusted by OIES"
-GUIDE = "FEL 1 LNG Capital Cost Estimating Guideline v0.1"
+GUIDE = "FEL 1 LNG Capital Cost Estimating Guideline v0.2"
 JUDGMENT = "Judgment (no public source)"
 
 # ---------------------------------------------------------------- facility types
@@ -103,21 +103,21 @@ BATTERY_LIMIT_ITEMS = {
 DEFAULT_BATTERY_LIMITS = ("trains", "utilities", "tanks", "marine", "site_works", "owners_costs")
 
 # ---------------------------------------------------------------- Step 4
-DEFAULT_ESCALATION_RATE = 0.03  # fallback only; judgment
-DEFAULT_DAMPING_F = 0.5  # guideline test case
+# Default: Open Plant Cost Index (OPCI), single case. Values, band and
+# supply-shock note come from OPCI (opci_link.py), not from this file.
+OPCI = "Haider (2026), Open Plant Cost Index (OPCI), DOI 10.5281/zenodo.23615226"
+OPCI_URL = "https://github.com/ORIMIZ-Consulting/open-plant-cost-index"
+DEFAULT_ESCALATION_RATE = 0.03  # constant-rate sensitivity only; judgment
+# Projection beyond the latest published OPCI quarter: (1 + inflation + real
+# escalation) per year. Stopgap until OPCI holds IMF inflation and its own real
+# escalation history (decision D4). Labelled "stopgap" in every output.
+STOPGAP_INFLATION = 0.025
+STOPGAP_REAL_ESCALATION = (0.0, 0.015, 0.035)  # low, mid, high
+STOPGAP_SOURCE = "Stopgap until OPCI holds the data (guideline Step 4, decision D4)"
 
 # ---------------------------------------------------------------- Step 5
-# Location factor groups, USA = 1.00. OIES Figure 5; "remote" from OIES text.
-LOCATION_GROUPS = {
-    "usa": (1.00, "USA"),
-    "yamal": (1.25, "Yamal (Russian Arctic)"),
-    "png": (1.29, "Papua New Guinea"),
-    "queensland": (1.34, "Queensland"),
-    "nw_australia": (1.72, "North West Australia"),
-    "remote": (1.30, "Remote site"),
-    "not_set": (1.00, "Not set (no adjustment)"),
-}
-LOCATION_STEP = 0.10  # guideline step rule; judgment
+# Location factors, ranges, confidence and sources come from the OPCI location
+# table (opci_link.location). New locations are added to OPCI, not here.
 CONSTRUCTION_SHARE = 0.32  # OIES Table 5
 
 # ---------------------------------------------------------------- Step 6
@@ -186,11 +186,16 @@ COST_TYPE_SHARES = {
 }
 PROCESS_SHARE_OF_EPC = 0.50  # OIES
 STORAGE_MARINE_SHARE_OF_EPC = 0.08  # guideline test case; judgment
+# Split within the storage and marine block: one third tank, two thirds jetty and marine.
+TANK_SHARE_OF_STORAGE_MARINE = 1 / 3  # guideline Step 11; judgment
 UTILITIES_SHARE_OF_REMAINDER = 0.60  # judgment
 
 # ---------------------------------------------------------------- Step 12
 CLASS_5_DEFAULT = (-0.30, 0.50)
 DEFINITION_GROWTH = (0.0, 0.15)
+RUBRIC_NOT_REVIEWED = "rubric, not reviewed"  # guideline Step 8 weights flag
+DEFAULT_ANALOG_SPREAD = (-0.15, 0.20)  # guideline Step 12 test case; used for a single analog
+CLASS_BAND_TOLERANCE = 0.02  # warn only when narrower than the class band by more than this
 CONTINGENCY_RATE = 0.15  # judgment; the guideline gives no default
 AACE_CLASSES = (
     ("5", "0% to 2%", "Capacity factoring, analog curves", "-20% to -50%", "+30% to +100%"),
@@ -200,7 +205,9 @@ AACE_CLASSES = (
 
 # ---------------------------------------------------------------- references
 FACTOR_REFERENCES = [
-    ("Location groups (USA 1.00 to NW Australia 1.72)", OIES, OIES_URL),
+    ("Escalation index, band and supply-shock note", OPCI, OPCI_URL),
+    ("Location factors, ranges and confidence (OPCI location table)", OPCI + "; OIES NG137 groups and step rule",
+     OPCI_URL),
     ("Cost type split (owner 10%, engineering 8%, equipment 30%, bulks 20%, construction 32%)", OIES, OIES_URL),
     ("Brownfield to greenfield x1.50", OIES, OIES_URL),
     ("Partly brownfield site x1.15", OIES + " (group adjustment)", OIES_URL),
@@ -216,8 +223,8 @@ FACTOR_REFERENCES = [
     ("Definition growth 0 / +15%", GUIDE + " (Donggi-Senoro, PNG LNG growth)", ""),
     ("Storage tank about USD 200m per 180,000 m3", TANK_REFERENCE["source"], ""),
     ("Dredging USD 15 to 30 per m3", "Cuyutlan (Dredging Today, 2010); Soyo (SWZ Maritime, 2010)", ""),
-    ("Location step 0.10", GUIDE + "; judgment", ""),
     ("Storage and marine 8% of EPC; utilities 60% of remainder", JUDGMENT, ""),
+    ("Storage and marine split: one third tank, two thirds jetty and marine", GUIDE + "; judgment", ""),
     ("Contingency rate 15% for the non-budget share", JUDGMENT, ""),
     ("Rubric points to weight: 0-1 = 1, 2-3 = 2, 4-5 = 3", JUDGMENT + " (tool's mapping)", ""),
 ]

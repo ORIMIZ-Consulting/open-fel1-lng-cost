@@ -11,7 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import factors as F
-from .estimate import EstimateResult
+from .estimate import EstimateResult, escalation_source
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3A5F")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -19,7 +19,7 @@ BOLD = Font(bold=True)
 
 DISCLAIMER = (
     "FEL 1 (AACE Class 5) screening estimate from public analog projects, following the "
-    "FEL 1 LNG Capital Cost Estimating Guideline v0.1. The range is a set of reasoned bounds, "
+    "FEL 1 LNG Capital Cost Estimating Guideline v0.2. The range is a set of reasoned bounds, "
     "not a statistical P10 and P90. Not for budget authorisation or an investment decision."
 )
 
@@ -94,8 +94,10 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         ("Total capacity (MTPA)", b.capacity_mtpa),
         ("Site type", b.site_type),
         ("Location", f"{b.location_name}, factor {b.target_location_factor():.2f}"),
-        ("Money of year", b.estimate_year),
+        ("OPCI location", b.location_code),
+        ("Estimate date", b.resolved_estimate_date().replace("Q", " Q")),
         ("Currency", b.report_currency),
+        ("Cost index", escalation_source(b)),
         (None, None),
         (f"Low ({b.report_currency} million)", round(r.low * fx)),
         (f"Base ({b.report_currency} million)", round(r.central * fx)),
@@ -116,6 +118,13 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
             ws.cell(row=row, column=1, value=label).font = BOLD
             ws.cell(row=row, column=2, value=value)
         row += 1
+    row += 1
+    ws.cell(row=row, column=1, value="Escalation and location (Steps 4 and 5)").font = BOLD
+    for line in r.escalation.get("lines", []) + r.location.get("lines", []):
+        row += 1
+        ws.cell(row=row, column=1, value=line).alignment = Alignment(wrap_text=True)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+    row += 1
     if r.warnings:
         row += 1
         ws.cell(row=row, column=1, value="Warnings").font = BOLD
@@ -154,7 +163,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
     # ---------------------------------------------------------- Weights
     wwt = wb.create_sheet("Weights")
     wcols = ["project", "same_region", "clean_figure", "size_close", "few_adjustments", "recent",
-             "rubric_points", "suggested_weight", "weight", "weight_share", "reason", "value",
+             "rubric_points", "suggested_weight", "weight", "weight_flag", "weight_share", "reason", "value",
              "vs_median", "outlier", "dropped", "drop_reason"]
     end = _table(wwt, r.weights[wcols], widths={"project": 36, "reason": 40})
     wwt.cell(row=end + 2, column=1, value="Weighted mean (USD/tpa)").font = BOLD
@@ -166,21 +175,28 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
 
     # ---------------------------------------------------------- Escalation
     we = wb.create_sheet("Escalation")
-    end = _table(we, r.cases)
-    if len(r.cases) > 1:
-        pivot = r.journey.pivot_table(index="project", columns="case", values="u_final").reset_index()
-        start = end + 2
-        end2 = _table(we, pivot, start_row=start, widths={"project": 36})
-        bc = BarChart()
-        bc.title = "Escalation cases per analog (USD per tpa)"
-        bc.height, bc.width = 10, 24
-        bc.add_data(Reference(we, min_col=2, max_col=pivot.shape[1], min_row=start, max_row=end2),
-                    titles_from_data=True)
-        bc.set_categories(Reference(we, min_col=1, min_row=start + 1, max_row=end2))
-        we.add_chart(bc, f"E{start}")
+    we.cell(row=1, column=1, value="Escalation panel: factor per analog").font = BOLD
+    row = 1
+    for line in r.escalation.get("lines", []) + r.escalation_panel_notes():
+        row += 1
+        we.cell(row=row, column=1, value=line).alignment = Alignment(wrap_text=True)
+        we.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+    panel = r.escalation_panel()
+    start = row + 2
+    end = _table(we, panel, start_row=start, widths={"project": 36})
+    bc = BarChart()
+    bc.type, bc.grouping, bc.overlap = "bar", "stacked", 100
+    bc.title = "Escalation factor per analog: published data and projection"
+    bc.height, bc.width = 10, 24
+    for col in ("f_published", "projection_part"):
+        j = list(panel.columns).index(col) + 1
+        bc.add_data(Reference(we, min_col=j, min_row=start, max_row=end), titles_from_data=True)
+    bc.set_categories(Reference(we, min_col=1, min_row=start + 1, max_row=end))
+    we.add_chart(bc, f"L{start}")
+    end = _table(we, r.cases, start_row=end + 3)
     if len(r.calibration):
         start = we.max_row + 3
-        we.cell(row=start - 1, column=1, value="Damping calibration pairs").font = BOLD
+        we.cell(row=start - 1, column=1, value="Calibration diagnostic (report only)").font = BOLD
         _table(we, r.calibration, start_row=start, widths={"earlier": 36, "later": 36})
 
     # ---------------------------------------------------------- Size curve

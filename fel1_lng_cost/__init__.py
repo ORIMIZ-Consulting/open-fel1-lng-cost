@@ -1,6 +1,6 @@
 """FEL1 LNG Cost: concept-stage (AACE Class 5) capital cost estimates from analogs.
 
-Implements the FEL 1 LNG Capital Cost Estimating Guideline v0.1 (docs/GUIDELINE.md).
+Implements the FEL 1 LNG Capital Cost Estimating Guideline v0.2 (docs/GUIDELINE.md).
 """
 from . import factors
 from .analogs import check_analogs, load_analogs
@@ -12,6 +12,7 @@ from .estimate import (
     compare_options,
     dredging_cost,
     escalation_factor,
+    escalation_source,
     estimate,
     tank_cost,
 )
@@ -20,6 +21,6 @@ from .export import to_excel_bytes, to_excel_file
 __all__ = [
     "BrownfieldShares", "EstimateBasis", "EstimateResult", "Method", "SiteItem",
     "check_analogs", "choose_base", "co2_item", "compare_options", "decision_log",
-    "dredging_cost", "escalation_factor", "estimate", "factors", "load_analogs",
+    "dredging_cost", "escalation_factor", "escalation_source", "estimate", "factors", "load_analogs",
     "make_basis", "tank_cost", "to_excel_bytes", "to_excel_file",
 ]

@@ -2,7 +2,21 @@
 
 **Analog-based Class 5 estimating for liquefied natural gas (LNG) plants: any location, capacity or technology**
 
-Version 0.1, 24 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft for tool development.
+Version 0.2, 24 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft for tool development.
+
+**What changed from version 0.1:** escalation and location now come from the Open Plant Cost Index (OPCI), a free index built from public domain data (decisions D1 to D5, 24 October 2026). The estimate date is entered by the user, usually the expected FID date, and any part beyond published data is shown as a projection. The two escalation cases are replaced by one data-based case with a band. Storage and marine default split, a weights flag, a saving cap and a class-band tolerance are added.
+
+## Decisions behind version 0.2
+
+The owner agreed these decisions on 24 October 2026.
+
+| # | Decision |
+| --- | --- |
+| D1 | OPCI installed as `opci>=1.0,<2.0`; latest data release stamped on every result; freeze switch; Dependabot weekly; user index file overrides; location factors from OPCI only |
+| D2 | Single escalation case (full OPCI change); back-test band ±5.5% (±9% for 2021 and 2022 analogs); half-change low case retired; review with OPCI LNG weights (version 1.1) |
+| D3 | Estimate date input with a final investment decision (FID) prompt; published data then labelled projection; split shown; reference line in today's money; spend profile parked for FEL 2 and Class 3 |
+| D4 | Projection rates from data held in OPCI (International Monetary Fund (IMF) forecast plus OPCI real escalation), labelled stopgap until then, user override |
+| D5 | Only the target location range is added to the estimate range; single-analog warning |
 
 ---
 
@@ -40,6 +54,10 @@ This guideline sets out how to build a front-end loading (FEL) 1 capital cost es
 | Normalization | Adjusting an analog's cost to the target's basis, one factor at a time |
 | Analog | A past project with a published cost |
 | CEPCI | Chemical Engineering Plant Cost Index |
+| OPCI | Open Plant Cost Index, the free plant cost index this guideline uses for escalation and location (github.com/ORIMIZ-Consulting/open-plant-cost-index, DOI 10.5281/zenodo.23615226) |
+| Data release | One monthly OPCI data set, named by its last month of data, for example data-2026-09 |
+| Projection | The part of an escalation factor beyond the latest published OPCI quarter, built from forecast rates |
+| FID | Final investment decision |
 | OIES | Oxford Institute for Energy Studies |
 | AACE | Association for the Advancement of Cost Engineering (AACE International) |
 
@@ -52,11 +70,11 @@ All costs are in USD unless stated. Convert other currencies at the cost-year av
 | 1 | Key inputs | Basis of estimate |
 | 2 | Analog selection | Filtered analog list |
 | 3 | Adjustment method | Multiply, add or hybrid |
-| 4 | Escalation | Factors to the estimate date, one or two cases |
-| 5 | Location | Location factor for target and each analog |
+| 4 | Escalation | Factor to the estimate date: published OPCI data, then a projection where needed |
+| 5 | Location | OPCI location factor and range for the target and each analog |
 | 6 | Scope and complexity | Each analog on the target's scope |
 | 7 | Size scaling | Each analog at the target train size |
-| 8 | Combining | One central value per case |
+| 8 | Combining | One central value |
 | 9 | Site-specific items | Base adders, risks and opportunities |
 | 10 | Variants and methods | A base for each option, with its range of methods |
 | 11 | Cost blocks | Split by area and by cost type |
@@ -75,8 +93,8 @@ Purpose comes first, because it sets the effort the rest deserves. A quick scree
 | 1.2 | Facility type | Required | Onshore liquefaction (FLNG to follow) | None |
 | 1.3 | Capacity per train and number of trains | Required | MTPA per train × trains | None |
 | 1.4 | Site type | Required | Greenfield; brownfield train addition; conversion (FLNG) | None |
-| 1.5 | Location | Required | Country and site; location factor shown, user can override | None |
-| 1.6 | Estimate date and currency | Optional | Any quarter; USD or local | Current quarter, USD |
+| 1.5 | Location | Required | A location from the OPCI table; factor, range and source shown; user can override | None |
+| 1.6 | Estimate date and currency | Required | Any quarter. Prompt: "Usually the expected FID date, for example 2029 Q4." USD or local | Latest published OPCI quarter, USD |
 | 1.7 | Feed gas | Optional | Lean; rich (LPG, condensate); high CO2 | Lean |
 | 1.8 | Process family | Optional | C3MR; DMR; Optimized Cascade; SMR; nitrogen expander; not yet chosen | Not yet chosen |
 | 1.9 | Battery limits | Optional | Tick list: trains, utilities, tanks, jetty and marine, site works, owner's costs, upstream, pipeline | All except upstream and pipeline |
@@ -117,38 +135,58 @@ Each filter can be tightened, loosened or switched off.
 
 ## 8. Step 4. Escalation
 
+**Default: OPCI, single case.** Escalation factor = OPCI(estimate date) ÷ OPCI(analog cost date). OPCI is built from 12 US Bureau of Labor Statistics price and wage series, weighted like the published CEPCI components, and checked against public CEPCI values.
+
 | Option | How it works | Source | Note |
 | --- | --- | --- | --- |
-| A. Constant rate | (1 + r) ^ (target year − cost year) | User sets r | Rough over long periods |
-| B. Plant cost index | Index(target) ÷ Index(cost year) | CEPCI, Chemical Engineering | Copyrighted: the user loads values; the tool cannot ship them |
-| C. Upstream capital cost index | Same, with an oil and gas construction index | S&P Global (formerly IHS) | Paid; follows the oil and gas cycle |
-| D. Damped index | 1 + f × (index ratio − 1) | Fraction f set by user or calibrated | A test case used f = 0.5 |
-| E. Two cases | Run two options and carry both | | Shows escalation as an uncertainty |
+| A. OPCI (default) | OPCI(target) ÷ OPCI(cost date) | OPCI, latest data release | Free, public domain data, refreshed monthly |
+| B. User index (override) | User loads index values; they replace OPCI | Private CEPCI subscription; S&P Global UCCI or DCCI; Nelson-Farrar | Licensed data stays on the user's machine; never published |
+| C. Constant rate | (1 + r) ^ (years) | User sets r | Sensitivity only |
 
-**Default:** E, run as B (high case) and D with f = 0.5 (low case), when the user loads an index. **Fallback** with no index: A at 3% per year, single case, with a warning.
+**Data release.** The tool uses the latest OPCI data release by default and stamps the OPCI version and data release on every result, for example "OPCI 1.0.0, data-2026-09". A freeze switch fixes a named release, so an old estimate can be reproduced exactly.
 
-**Calibration feature:** where the analog set holds a clean pair (same scope and site type, similar contractor and region, built years apart), the tool computes how much of the index change real LNG costs followed:
+**Escalation band.** The factor carries a band from OPCI's back-test against public CEPCI: about ±5.5% for normal years and about ±9% when the analog's cost date falls in 2021 or 2022 (supply-shock years). The tool reads these limits from OPCI. The band enters the range as a named uncertainty (Step 12).
 
-f = (actual cost ratio − 1) ÷ (index ratio − 1)
+**Supply-shock note.** When an analog's cost date or the estimate date falls in 2021 or 2022, the tool carries OPCI's note: escalation from those dates may be somewhat overstated, and escalation to them somewhat understated.
 
-The tool reports f and the pair used. The user decides whether to apply it. In a test case, Corpus Christi (2015) and Rio Grande (2023) gave real cost movement between −13% and +22% while CEPCI rose 43%.
+**Estimate date after the latest published quarter.** The factor is split into two parts, both shown:
 
-**Context:** the Gas Exporting Countries Forum (GECF, May 2026) reports that proposed projects cost about 45 to 55% more, in levelized terms, than existing and under-construction ones. This argues against damping escalation too far for a new greenfield project.
+1. **Published part:** OPCI from the analog's cost date to the latest published quarter.
+2. **Projection:** from the latest published quarter to the estimate date, at (1 + inflation + real escalation) per year, with low, mid and high cases. Labelled "projection".
+
+Example: "Published data to 2026 Q3: ×1.53. Projection 2026 Q3 to 2029 Q4: ×1.13 (low 1.08, high 1.20)."
+
+| Projection rate | Default source | Stopgap until OPCI holds the data |
+| --- | --- | --- |
+| Inflation | Latest IMF World Economic Outlook forecast for US consumer prices, stored in OPCI | 2.5% a year |
+| Real escalation, low | OPCI history: long-run average from 2008 | 0% |
+| Real escalation, mid | OPCI history: last ten years | +1.5% |
+| Real escalation, high | OPCI history: highest five-year stretch | +3.5% |
+
+The user can override any rate. Every result states the source of each rate, and stopgap values are labelled "stopgap".
+
+**Reference line.** Every result also shows the cost at the latest published quarter (today's money), so estimates made for different FID dates can be compared.
+
+**Out of scope at FEL 1:** spend profile and escalation to mid-construction. These belong to FEL 2 and Class 3.
+
+**Calibration diagnostic (report only):** where the analog set holds a clean pair (same scope and site type, similar contractor and region, built years apart), the tool reports how much of the index change real LNG costs followed: f = (actual cost ratio − 1) ÷ (index ratio − 1). It does not change the estimate. It feeds the review of LNG-specific escalation planned with OPCI's LNG weights (version 1.1). In a test case, Corpus Christi (2015) and Rio Grande (2023) gave real cost movement between −13% and +22% while the index rose 43%.
+
+**Context:** the Gas Exporting Countries Forum (GECF, May 2026) reports that proposed projects cost about 45 to 55% more, in levelized terms, than existing and under-construction ones. This argues against damping escalation for a new greenfield project.
 
 ## 9. Step 5. Location
 
-Adjustment for each analog: target factor ÷ analog factor.
+**Default: OPCI location table.** Each analog is moved to the target's location with factor(target) ÷ factor(analog). Each factor in the table has a central value, a range, a confidence level, a method, a source and an as-of year.
 
 | Option | How it works | Source | Note |
 | --- | --- | --- | --- |
-| A. OIES group factors (default, editable) | USA 1.00; Yamal 1.25; PNG 1.29; Queensland 1.34; NW Australia 1.72; remote sites about 1.30 | OIES NG137 (2018) | LNG-specific; few places; 2014 to 2018 conditions |
-| B. User factor | User sets target and analog factors | Judgment | Full control |
+| A. OPCI location table (default) | Factors and ranges from OPCI, for example US Gulf Coast 1.00; North West Australia 1.72 (1.55 to 1.98); East Kalimantan 1.20 (1.08 to 1.38) | OIES NG137 group factors plus OPCI's written step rule | One shared table for all tools; the step trail for each factor is in its notes |
+| B. User factor | User sets target and analog factors | Judgment | Logged as an override |
 | C. Split by cost type | Apply the factor only to the local share (construction, about 32%) | OIES cost split | A 1.50 labour factor then moves the total by about 16% |
 | D. Published country factor sets | Process plant factors by country | Compass International; Richardson (paid) | Wide coverage; not LNG-specific |
 
-**Step rule (judgment, logged):** start from the nearest OIES group. Move one step of 0.10 down for an established industrial LNG site with a trained workforce. Move one step up for a first-of-its-kind remote site with no infrastructure.
+**Step rule.** New locations are added to OPCI, not to this tool. OPCI starts from the nearest published group and moves in steps of 0.10, one step for each clear difference (existing hub, local yards, skilled labour, remoteness, climate), and records each step.
 
-*Example:* OIES groups Bintulu as remote (1.30) but places the industrialised site nearer US costs, so Bintulu is taken at 1.10.
+**Range in the estimate.** Only the **target** location range enters the estimate range, as its own named uncertainty (Step 12). Errors in the analog location factors are not added again: they show up as scatter between the normalized analogs, which the analog spread already covers. When a cost moves between two places that are both not the reference, OPCI combines their ranges by root sum of squares.
 
 ## 10. Step 6. Scope and complexity
 
@@ -209,6 +247,8 @@ New unit cost = Analog unit cost × (Target train size ÷ Analog train size) ^ (
 
 **Warning from a test case:** the rubric ranked Rio Grande and Tangguh highest, nearly the reverse of the judgment weights. A rubric is good at prompting the right questions and poor at weighing the answers. Hence option D.
 
+**Weights flag:** any weight that still equals the rubric suggestion and has not been reviewed by the user is flagged "rubric, not reviewed" in the weights panel and the decision log.
+
 **Always show three results side by side:** weighted mean, simple mean and median. If they differ by more than about 5%, the weights are doing a lot of work and deserve a second look.
 
 **Outlier flag:** any analog more than about 30% from the median after normalization is flagged. The user keeps or drops it, with a reason.
@@ -263,7 +303,7 @@ Always produce both views.
 | Block | Default | Basis |
 | --- | --- | --- |
 | Process train (inlet, pre-treatment, liquefaction, refrigerant) | 50% of EPC | OIES |
-| Storage and marine | From the Step 9 item library (about 8% in a test case) | Public references |
+| Storage and marine | From the Step 9 item library (about 8% in a test case). Default split within the block: one third tank, two thirds jetty and marine | Public references; split by judgment, labelled |
 | Utilities and offsites | 60% of the remainder | Judgment, labelled |
 | Site works and infrastructure | 40% of the remainder | Judgment, labelled |
 
@@ -275,26 +315,28 @@ For a brownfield variant, price block by block: process train at 100%; then the 
 | --- | --- |
 | A. Class band | Base × (1 + low) and × (1 + high) |
 | B. Analog spread | Weighted P10 and P90 of normalized analogs |
-| C. Built from named uncertainties (default) | Analog spread, plus definition growth, plus site risks, plus escalation cases |
+| C. Built from named uncertainties (default) | Analog spread, definition growth, site risks, escalation band, projection and target location range |
 | D. Probabilistic | Monte Carlo on cost blocks and risks; for FEL 2 |
 
-**Default:** C, checked against A. If C is narrower than the class band, the tool warns; the user widens it or records why the project is better defined than a typical Class 5.
+**Default:** C, checked against A. If C is narrower than the class band by more than 2 percentage points at either end, the tool warns; the user widens it or records why the project is better defined than a typical Class 5. The tolerance avoids warnings on rounding.
 
 **Building C:**
 
-- **Central:** midpoint of the high and low escalation cases.
-- **Low:** low case, less the analog spread, less site opportunities.
-- **High:** high case, plus the analog spread, definition growth and site risks.
+- **Central:** the normalized analog level, escalated with the single OPCI case (and the mid projection where the estimate date is beyond published data), moved to the target location.
+- **Low and high:** the central value combined with each named uncertainty below, by root sum of squares, plus site opportunities (low) and site risks (high) from Step 9.
 
 | Allowance | Default | Evidence |
 | --- | --- | --- |
 | Analog spread | From the normalized analogs (a test case gave −15% / +20%) | Spread at the target train size |
 | Definition growth | 0 / +15% | Donggi-Senoro's estimate rose 40% just before FID; PNG LNG rose from USD 15.7 to 19 billion after sanction |
 | Site risks | From Step 9 | Item library |
+| Escalation band | About ±5.5%; about ±9% for analogs dated 2021 or 2022 | OPCI back-test against public CEPCI |
+| Projection | Low and high projection cases (only when the estimate date is beyond published data) | Step 4 rates |
+| Target location | The OPCI range of the target location factor | OPCI location table |
 
 **Contingency flag per analog:** sanctioned budget (contains contingency); EPC only (no owner's contingency); unknown. Add no contingency line when most of the weight sits on budgets. Otherwise add one for the missing share only.
 
-**Correlated comparison of options:** when two options are compared, range the difference separately, holding shared drivers (escalation, location, analog level) together. Two overlapping ranges do not mean the saving might be zero.
+**Correlated comparison of options:** when two options are compared, range the difference separately, holding shared drivers (escalation, location, analog level) together. Two overlapping ranges do not mean the saving might be zero. **Saving cap:** the high end of a saving is capped at the saving given by the variant's most optimistic method (Step 10), so the range never claims more than any single method supports.
 
 **Accuracy reference (AACE 18R-97, process industries):**
 
@@ -312,16 +354,16 @@ All on by default.
 
 | Output | Content |
 | --- | --- |
-| Summary | Base, low and high; unit cost; class and accuracy |
+| Summary | Base, low and high; unit cost; class and accuracy; estimate date; OPCI version and data release; reference line in today's money |
 | Analog journey table | Each analog's value after every step, with factor and source |
 | Journey chart | Every analog across the steps, one colour each |
-| Escalation cases chart | High against low case per analog (when two cases run) |
+| Escalation panel | Factor per analog, split into published part and projection, with the band and any supply-shock note |
 | Size curve | Analogs against train size, with the curve and the target |
 | Weights panel | Rubric points, chosen weights and reasons; weighted mean, simple mean and median |
 | Cost blocks | By area and by cost type |
 | Risk and opportunity register | Site items with ranges and status |
 | Range chart | Low, base and high per option, plus the difference where options are compared |
-| Decision log | Every switch: setting, default, reason, date. Defaults included |
+| Decision log | Every switch: setting, default, reason, date. Defaults included. OPCI version, data release and freeze setting recorded |
 | References | Source of every analog figure and every factor |
 | Export | Spreadsheet with all of the above; charts as images |
 
@@ -338,7 +380,9 @@ The 13 steps stay the same. The FLNG module changes:
 
 ## 19. Known limits
 
-- Location factors and the escalation case move every analog together. They are the largest judgments and must always be shown.
+- Location factors and escalation move every analog together. They are the largest single drivers and must always be shown, with their sources and ranges.
+- OPCI uses US prices. Other countries are handled through location factors, which are judgment based. OPCI tracks CEPCI closely but is not CEPCI.
+- Projections beyond the latest published quarter are forecasts, not data.
 - Public figures rarely state their full scope. Read each source before using a number.
 - Most figures are announced at FID. Final costs are often higher.
 - Contractor markets move in cycles that no index captures well.
@@ -363,7 +407,10 @@ The 13 steps stay the same. The FLNG module changes:
 
 **Cost indices**
 
-- Chemical Engineering Plant Cost Index (CEPCI), Chemical Engineering magazine. https://www.chemengonline.com/pci
+- Haider, S. Z. (2026). Open Plant Cost Index (OPCI), version 1.0.0. ORIMIZ Consulting. DOI 10.5281/zenodo.23615226. https://github.com/ORIMIZ-Consulting/open-plant-cost-index
+- US Bureau of Labor Statistics, Producer Price Index and Current Employment Statistics, via FRED, Federal Reserve Bank of St. Louis. https://fred.stlouisfed.org
+- International Monetary Fund, World Economic Outlook (inflation forecasts for projections).
+- Chemical Engineering Plant Cost Index (CEPCI), Chemical Engineering magazine. https://www.chemengonline.com/pci (used by OPCI for validation only; private override in this tool)
 - S&P Global capital costs indices (formerly IHS Markit).
 
 **Analog project sources**
