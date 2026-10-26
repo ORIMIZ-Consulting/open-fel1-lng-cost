@@ -1,5 +1,7 @@
 # FEL1 LNG Cost
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23654461.svg)](https://doi.org/10.5281/zenodo.23654461)
+
 Maintained by ORIMIZ Consulting.
 
 A free tool for a first capital cost estimate of a liquefied natural gas (LNG) liquefaction plant, at Front-End Loading 1 (FEL 1), the concept stage. It works from past projects with published costs, called **analogs**.
@@ -120,6 +122,12 @@ These come from the guideline (Section 19), plus a few of the tool's own.
 - Projection rates are a labelled stopgap (inflation 2.5%; real escalation 0%, +1.5%, +3.5%) until OPCI holds the data.
 - Probabilistic ranging (Step 12, option D) is for FEL 2 and is not built.
 - The tool holds no location factors of its own. New locations are added to OPCI.
+
+## How to cite
+
+Haider, S. Z. (2026). *Open FEL1 LNG Cost* (Version 0.2.0) [Computer software]. ORIMIZ Consulting. https://doi.org/10.5281/zenodo.23654461
+
+This DOI (digital object identifier) always points to the latest version. Each release also has its own DOI on Zenodo. `CITATION.cff` holds the same details, and GitHub shows them under **Cite this repository**.
 
 ## Licence
 
