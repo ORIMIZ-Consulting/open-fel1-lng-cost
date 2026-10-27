@@ -500,6 +500,10 @@ def site_register(items: list[SiteItem], base: float, b: EstimateBasis) -> pd.Da
             treatment = "Outside battery limits" if removed else "Hybrid block, added to base"
             adder = 0.0 if removed else it.central
             d_low, d_high = (0.0, 0.0) if removed else (it.low - it.central, it.high - it.central)
+        elif it.analogs_carry_typical and it.low > 0:
+            # A floor is a certain cost the analogs do not carry: it moves to the base (Step 9).
+            treatment = "Analogs carry it: floor moved to base; the rest carried as risk"
+            adder, d_low, d_high = it.low, 0.0, it.high - it.low
         elif it.analogs_carry_typical:
             treatment = "Analogs carry it: difference carried as risk or opportunity"
             adder, d_low, d_high = 0.0, it.low, it.high
@@ -768,6 +772,8 @@ def brownfield_block_method(df: pd.DataFrame, b: EstimateBasis, adders: float) -
     note = (f"Process train 100%; utilities {s.utilities:.0%}, site works {s.site_works:.0%}, "
             f"storage and marine {s.storage_marine:.0%} of the greenfield blocks; tie-ins "
             f"USD {s.tie_ins_musd:,.0f}m.")
+    # Four judgment calls: utilities, site works and storage and marine shares, and tie-ins. The process
+    # train at 100% is not a judgment; hub asset condition is a site item (floor in the base), not a call here.
     return Method("Block by block", value, judgment_calls=4, note=note)
 
 
@@ -1041,6 +1047,13 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
 
     # Decision log and references
     log = pd.DataFrame(decision_log(b))
+    floors = core.register[core.register["treatment"].str.contains("floor moved to base")]
+    if len(floors):
+        log = pd.concat([log, pd.DataFrame([{
+            "step": 9, "switch": f"Site item floor: {x.item}", "setting": f"{x.base_adder:g} added to base",
+            "default": "None", "changed": True, "source_of_default": x.source or "User",
+            "reason": "floor moved to base", "date": b.log_date,
+        } for x in floors.itertuples()])], ignore_index=True)
     stamp = opci_link.stamp(b.opci_release)
     from . import __version__ as tool_version
     log = pd.concat([log, pd.DataFrame([

@@ -412,6 +412,21 @@ def test_site_item_decision_tree(tmp_path):
     assert res.central == pytest.approx(5100)
 
 
+def test_risk_floor_moves_to_base(tmp_path):
+    df = analogs(tmp_path, {})
+    item = SiteItem("Asset condition", "other", True, 0, 100, 500, driver="Existing hub")
+    res = estimate(df, basis(site_items=[item], class_band_floor=False, reasons={"class_band_floor": "test"}))
+    reg = res.site_register.set_index("item").loc["Asset condition"]
+    assert reg["base_adder"] == 100 and reg["opportunity"] == 0 and reg["risk"] == 400
+    assert "floor moved to base" in reg["treatment"]
+    assert res.central == pytest.approx(5100)
+    no_item = estimate(df, basis(class_band_floor=False, reasons={"class_band_floor": "test"}))
+    assert res.high - no_item.high == pytest.approx(100 * (1 + res.range_parts["combined_high"]) + 400)
+    log = res.log.set_index("switch")
+    assert log.loc["Site item floor: Asset condition", "reason"] == "floor moved to base"
+    assert log.loc["Site item floor: Asset condition", "setting"] == "100 added to base"
+
+
 def test_tank_library():
     assert tank_cost(180_000) == pytest.approx(200)
     assert tank_cost(220_000) == pytest.approx(200 * (220 / 180) ** 0.6)
