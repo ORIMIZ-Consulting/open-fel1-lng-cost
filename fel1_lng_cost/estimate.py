@@ -1107,15 +1107,17 @@ def escalation_summary(b: EstimateBasis, how: str, proj: dict | None, journey: p
            "reference_date": None, "reference_central": None}
     lines = [f"Estimate date {show(target)}. Cost index: {out['source']}."]
     latest = last_published(b, how)
+    published = journey["f_published"].median()
+    kind = {"opci": "Published data", "index": "Published index"}.get(how, "Constant rate")
+    to = latest if proj else target
+    lines.append(f"{kind} to {show(to)}: x{published:.2f} (median of the analogs; each analog in the "
+                 "journey table)." + ("" if proj or how == "constant" else " No projection."))
     if latest is not None:
         index_value = _opci_value if how == "opci" else _index_value
         if proj:
             ref = central / proj["mid"]
             r = proj["rates"]
             lines += [
-                f"Published {'data' if how == 'opci' else 'index'} to {show(latest)}: "
-                f"x{journey['f_published'].median():.2f} "
-                "(median of the analogs; each analog in the journey table).",
                 f"Projection {show(latest)} to {show(target)}: x{proj['mid']:.2f} "
                 f"(low {proj['low']:.2f}, high {proj['high']:.2f}). This part is a projection, not data.",
                 f"Projection rates: inflation {r['inflation']:.1%} a year ({r['inflation_source']}); "

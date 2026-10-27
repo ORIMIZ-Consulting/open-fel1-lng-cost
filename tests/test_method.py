@@ -186,12 +186,27 @@ def test_no_projection_up_to_latest_quarter(tmp_path):
         res = estimate(df, basis(estimate_date=date))
         assert res.escalation["projection"] is None
         assert res.journey["f_projection"].eq(1.0).all()
-        assert not any("rojection" in line for line in res.escalation["lines"])
+        assert not any(line.startswith("Projection") for line in res.escalation["lines"])
     res = estimate(df, basis(estimate_date="2024Q2"))
     assert central_unit(res) == pytest.approx(1000 * opci_ratio(2015, "2024Q2", freq="quarterly"))
     assert res.escalation["reference_date"] == latest
     assert res.escalation["reference_central"] == pytest.approx(
         res.central * opci_ratio("2024Q2", latest, freq="quarterly", base_freq="quarterly"))
+
+
+def test_published_factor_is_always_printed(tmp_path):
+    df = analogs(tmp_path, {"cost_year": 2015, "fid_year": 2015})
+    latest = opci_link.latest_quarter()
+    now = estimate(df, basis(estimate_date=latest))
+    f_now = opci_ratio(2015, latest, freq="quarterly")
+    assert f"Published data to {opci_link.show_period(latest)}: x{f_now:.2f}" in now.escalation["lines"][1]
+    assert now.escalation["lines"][1].endswith("No projection.")
+    later = estimate(df, basis(estimate_date="2029Q4"))
+    assert later.escalation["lines"][1].startswith(f"Published data to {opci_link.show_period(latest)}: x{f_now:.2f}")
+    own = estimate(df, basis(estimate_date="2025", cost_index={2015: 100.0, 2025: 150.0}))
+    assert own.escalation["lines"][1].startswith("Published index to 2025: x1.50")
+    flat = estimate(df, basis(estimate_date="2025", escalation_mode="constant"))
+    assert flat.escalation["lines"][1].startswith(f"Constant rate to 2025: x{1.03 ** 10:.2f}")
 
 
 def test_projection_beyond_latest_quarter(tmp_path):
