@@ -1039,6 +1039,9 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
          "default": "Latest data release", "changed": stamp["frozen"], "source_of_default": F.OPCI,
          "reason": ("Frozen on a named release" if stamp["frozen"] else "Latest release (not frozen)"),
          "date": b.log_date},
+        {"step": 5, "switch": "OPCI location table version", "setting": opci_link.location_version(),
+         "default": "Installed version", "changed": False, "source_of_default": F.OPCI,
+         "reason": "Recorded with every result", "date": b.log_date},
     ])], ignore_index=True)
     kept_rubric = core.weights[~core.weights["id"].isin(list(b.weights)) & ~core.weights["dropped"]
                                & (core.weights["weight"] == core.weights["suggested_weight"])]

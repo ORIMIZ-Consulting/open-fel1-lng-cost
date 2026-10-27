@@ -606,6 +606,7 @@ def test_decision_log_records_opci(tmp_path):
     assert log.loc["OPCI version", "setting"] == opci.__version__
     assert log.loc["OPCI data release used", "setting"] == opci_link.latest_release()
     assert log.loc["OPCI data release (freeze switch)", "setting"] == "Latest"
+    assert log.loc["OPCI location table version", "setting"] == opci.locations.version()
     name = opci_link.releases()[0]
     frozen = estimate(df, basis(opci_release=name)).log.set_index("switch")
     assert frozen.loc["OPCI data release (freeze switch)", "setting"] == name
