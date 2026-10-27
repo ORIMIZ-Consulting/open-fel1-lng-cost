@@ -2,13 +2,15 @@
 
 **Analog-based Class 5 estimating for liquefied natural gas (LNG) plants: any location, capacity or technology**
 
-Version 0.2, 24 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft for tool development.
+Version 0.3, 27 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft for tool development.
+
+**What changed from version 0.2:** the reported range is the wider of the named-uncertainty range and the class band, and both are shown (D6). A site item's floor above zero moves into the base (D7). Method D in Step 10 counts 4 judgment calls (D8). The 2-point class-band warning is removed.
 
 **What changed from version 0.1:** escalation and location now come from the Open Plant Cost Index (OPCI), a free index built from public domain data (decisions D1 to D5, 24 October 2026). The estimate date is entered by the user, usually the expected FID date, and any part beyond published data is shown as a projection. The two escalation cases are replaced by one data-based case with a band. Storage and marine default split, a weights flag, a saving cap and a class-band tolerance are added.
 
-## Decisions behind version 0.2
+## Decisions behind versions 0.2 and 0.3
 
-These decisions were approved by the author (Syed Zia Haider) on 24 October 2026.
+These decisions were approved by the author (Syed Zia Haider): D1 to D5 on 24 October 2026, D6 on 26 October 2026, and D7 and D8 on 27 October 2026.
 
 | # | Decision |
 | --- | --- |
@@ -17,6 +19,9 @@ These decisions were approved by the author (Syed Zia Haider) on 24 October 2026
 | D3 | Estimate date input with a final investment decision (FID) prompt; published data then labelled projection; split shown; reference line in today's money; spend profile parked for FEL 2 and Class 3 |
 | D4 | Projection rates from data held in OPCI (International Monetary Fund (IMF) forecast plus OPCI real escalation), labelled stopgap until then, user override |
 | D5 | Only the target location range is added to the estimate range; single-analog warning |
+| D6 | The reported range is the wider of the named-uncertainty range and the class band; both are shown; the user can switch to the named range alone with a logged reason (Step 12) |
+| D7 | A site item's floor above zero is a certain cost: it moves into the base and only the remainder stays as a risk (Step 9) |
+| D8 | Method D (block by block) counts 4 judgment calls; the process train at 100% is not a judgment (Step 10) |
 
 ---
 
@@ -266,6 +271,8 @@ New unit cost = Analog unit cost × (Target train size ÷ Analog train size) ^ (
 
 **Materiality threshold:** default 1% of the base estimate; user can override.
 
+**Floor on a risk (D7):** when a site item's low value is above zero, that floor is a certain cost the analogs do not carry. The floor moves into the base, and only the remainder stays as a risk. The decision log records "floor moved to base". Example: hub asset condition of +USD 0.1 to +0.5 billion becomes +0.1 billion in the base and a risk of 0 to +0.4 billion.
+
 **Item library:**
 
 | Item | Driver | Public reference point |
@@ -291,6 +298,8 @@ Where an option (for example a brownfield variant) can be priced several ways, r
 
 - At least two independent methods, with the gap explained in writing.
 - Switch the base when data arrives: a method whose judgment calls can be replaced with site facts becomes the base once those facts exist.
+
+**Method D, block by block (D8):** counts 4 judgment calls: the shares of utilities, site works and storage and marine the new project must build, and the tie-ins. The process train at 100% is not a judgment. Site risks such as hub asset condition are site items (Step 9), so they are not counted again inside Method D.
 
 ## 15. Step 11. Cost blocks
 
@@ -318,7 +327,7 @@ For a brownfield variant, price block by block: process train at 100%; then the 
 | C. Built from named uncertainties (default) | Analog spread, definition growth, site risks, escalation band, projection and target location range |
 | D. Probabilistic | Monte Carlo on cost blocks and risks; for FEL 2 |
 
-**Default:** C, checked against A. If C is narrower than the class band by more than 2 percentage points at either end, the tool warns; the user widens it or records why the project is better defined than a typical Class 5. The tolerance avoids warnings on rounding.
+**Default (D6):** report the wider of C and A, end by end, and show both. For example: "Class band applied; named uncertainties alone give −23% / +30%." A Class 5 estimate carries uncertainties no FEL 1 method can measure, such as the contractor market cycle and undefined scope, so the class band is the floor of the reported range. The user can switch to C alone, with a reason recorded in the decision log.
 
 **Building C:**
 

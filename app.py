@@ -28,7 +28,7 @@ st.set_page_config(page_title="FEL1 LNG Cost", layout="wide")
 st.title("FEL1 LNG cost from analogs")
 st.caption(
     "Concept-stage (AACE Class 5) capital cost for LNG plants from public analog projects, "
-    "following the FEL 1 LNG Capital Cost Estimating Guideline v0.2. Every method choice is a "
+    "following the FEL 1 LNG Capital Cost Estimating Guideline v0.3. Every method choice is a "
     "switch, and every switch goes into the decision log."
 )
 index_line = st.empty()

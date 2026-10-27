@@ -19,7 +19,7 @@ BOLD = Font(bold=True)
 
 DISCLAIMER = (
     "FEL 1 (AACE Class 5) screening estimate from public analog projects, following the "
-    "FEL 1 LNG Capital Cost Estimating Guideline v0.2. The range is a set of reasoned bounds, "
+    "FEL 1 LNG Capital Cost Estimating Guideline v0.3. The range is a set of reasoned bounds, "
     "not a statistical P10 and P90. Not for budget authorisation or an investment decision."
 )
 

@@ -1,6 +1,6 @@
 """FEL1 LNG Cost: concept-stage (AACE Class 5) capital cost estimates from analogs.
 
-Implements the FEL 1 LNG Capital Cost Estimating Guideline v0.2 (docs/GUIDELINE.md).
+Implements the FEL 1 LNG Capital Cost Estimating Guideline v0.3 (docs/GUIDELINE.md).
 """
 __version__ = "0.2.0"  # tool version; also read by pyproject.toml
 

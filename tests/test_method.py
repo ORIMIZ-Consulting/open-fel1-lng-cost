@@ -628,8 +628,8 @@ def test_decision_log_records_opci(tmp_path):
     assert frozen.loc["OPCI data release used", "reason"] == "Frozen on a named release"
 
 
-def test_guideline_labels_are_v02():
-    assert F.GUIDE.endswith("v0.2")
+def test_guideline_labels_are_v03():
+    assert F.GUIDE.endswith("v0.3")
 
 
 def test_versions_on_every_result(tmp_path):
@@ -640,7 +640,7 @@ def test_versions_on_every_result(tmp_path):
     assert log.loc["Tool version", "setting"] == f"open-fel1-lng-cost {fel1_lng_cost.__version__}"
     assert log.loc["Guideline version", "setting"] == F.GUIDE
     line = [x for x in res.summary().splitlines() if "Versions:" in x][0]
-    for part in (fel1_lng_cost.__version__, "Guideline v0.2", opci.__version__, opci_link.latest_release(),
+    for part in (fel1_lng_cost.__version__, "Guideline v0.3", opci.__version__, opci_link.latest_release(),
                  opci_link.location_version()):
         assert part in line
 

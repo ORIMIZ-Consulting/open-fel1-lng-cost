@@ -6,7 +6,7 @@ Maintained by ORIMIZ Consulting.
 
 A free tool for a first capital cost estimate of a liquefied natural gas (LNG) liquefaction plant, at Front-End Loading 1 (FEL 1), the concept stage. It works from past projects with published costs, called **analogs**.
 
-The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.2](docs/GUIDELINE.md). Version 0.2 takes escalation and location from the [Open Plant Cost Index (OPCI)](https://github.com/ORIMIZ-Consulting/open-plant-cost-index). The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
+The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.3](docs/GUIDELINE.md). Since version 0.2 it takes escalation and location from the [Open Plant Cost Index (OPCI)](https://github.com/ORIMIZ-Consulting/open-plant-cost-index). The guideline has 13 steps. In each step, every method choice is a **switch** with options, a default and a source. You can change any switch. The tool records every switch, defaults included, in a **decision log**.
 
 > **Use with care.** The result is an Association for the Advancement of Cost Engineering (AACE) Class 5 estimate: good for screening ideas, comparing concepts and supporting a Gate 1 decision. It is not a budget, and it must not be used for an investment decision. The range is a set of reasoned bounds, not a statistical P10 and P90.
 
@@ -115,7 +115,7 @@ By default the tool escalates with OPCI, which installs with the tool. The Chemi
 | `data/public_analogs.csv` | Public analogs with sources |
 | `data/analog_template.csv` | Blank row for your own analogs |
 | `data/cost_index_template.csv` | Blank cost index |
-| `docs/GUIDELINE.md` | The estimating guideline (version 0.2) |
+| `docs/GUIDELINE.md` | The estimating guideline (version 0.3) |
 | `examples/example_estimate.py` | Greenfield against brownfield, in Python |
 | `tests/` | Automatic checks. Run `pytest` |
 | `pyproject.toml` | Package setup, so `pip install .` works |
@@ -129,7 +129,7 @@ Every result, the Excel Summary sheet and the decision log carry five versions. 
 | Version | What it tells you | Example |
 |---|---|---|
 | Tool version | The release of this tool's code | open-fel1-lng-cost 0.2.0 |
-| Guideline version | The estimating method the code follows (`docs/GUIDELINE.md`) | Guideline v0.2 |
+| Guideline version | The estimating method the code follows (`docs/GUIDELINE.md`) | Guideline v0.3 |
 | OPCI version | The Open Plant Cost Index code that gives escalation and location | OPCI 1.1.0 |
 | Data release | The monthly OPCI data set, named by its last month of data. Freeze it to reproduce an old estimate exactly | data-2026-09 |
 | Location table version | The OPCI table of location factors, ranges and sources | OPCI location table 0.2.0 |
