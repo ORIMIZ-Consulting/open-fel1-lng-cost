@@ -62,15 +62,18 @@ with st.sidebar:
                    f"Source: {loc_info['source']}")
     override = st.checkbox("Enter my own location factor (logged as an override)")
     loc_factor = st.number_input("Location factor", 0.5, 3.0, float(loc_info["factor"]), 0.05) if override else None
-    est_text = st.text_input("Estimate date (quarter)", opci_link.show_period(opci_link.latest_quarter()),
-                             placeholder="2029 Q4",
-                             help="The default is the latest published OPCI quarter.")
+    est_text = st.text_input("Estimate date (quarter), required", "", placeholder="2029 Q4",
+                             help="The latest published OPCI quarter is "
+                                  f"{opci_link.show_period(opci_link.latest_quarter())}.")
+    st.caption("Usually the expected FID date, for example 2029 Q4.")
+    if not est_text.strip():
+        st.warning("Enter the estimate date (quarter) to run the estimate.")
+        st.stop()
     try:
         est_date = opci_link.parse_period(est_text)
     except ValueError as err:
         st.error(str(err))
         st.stop()
-    st.caption("Usually the expected FID date, for example 2029 Q4.")
     c1, c2 = st.columns(2)
     currency = c1.text_input("Report currency", "USD")
     fx = c2.number_input("Units per USD", 0.0001, 100000.0, 1.0)

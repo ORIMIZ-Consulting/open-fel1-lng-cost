@@ -30,7 +30,7 @@ streamlit run app.py
 
 Your browser opens the app.
 
-1. Fill in **Step 1** in the sidebar: purpose, train size, number of trains, site type and location.
+1. Fill in **Step 1** in the sidebar: purpose, train size, number of trains, site type, location and the estimate date (required; usually the expected FID date).
 2. Read the **Result** tab.
 3. Review the switches in **Method switches**, the weights in **Analogs and weights**, and add site items in **Site items**. Give a reason for each change.
 4. Download the Excel workbook.

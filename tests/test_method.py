@@ -551,6 +551,16 @@ def test_saving_cap_at_most_optimistic_method(tmp_path):
 
 
 # ------------------------------------------------------------- Step 13
+def test_purpose_is_validated_and_default_date_is_stated(tmp_path):
+    df = analogs(tmp_path, {})
+    with pytest.raises(ValueError, match="Unknown purpose"):
+        estimate(df, basis(purpose="budget"))
+    res = estimate(df, basis(estimate_date=None))
+    assert res.warnings[0].startswith("No estimate date given")
+    assert opci_link.show_period(opci_link.latest_quarter()) in res.warnings[0]
+    assert not any(w.startswith("No estimate date") for w in estimate(df, basis()).warnings)
+
+
 def test_decision_log_includes_defaults(tmp_path):
     df = analogs(tmp_path, {})
     res = estimate(df, basis(reasons={"step:7": "Practice value"}))

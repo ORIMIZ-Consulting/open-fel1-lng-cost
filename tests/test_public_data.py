@@ -53,6 +53,11 @@ def test_app_runs():
 
     at = AppTest.from_file(str(APP), default_timeout=120).run()
     assert not at.exception
+    assert len(at.metric) == 0  # the estimate date is required before anything runs
+    assert any("Enter the estimate date" in w.value for w in at.warning)
+    date = [t for t in at.sidebar.text_input if t.label.startswith("Estimate date")][0]
+    date.set_value(opci_link.show_period(opci_link.latest_quarter())).run()
+    assert not at.exception
     assert len(at.metric) >= 4
     assert any(opci_link.stamp_label() in c.value for c in at.caption)
 

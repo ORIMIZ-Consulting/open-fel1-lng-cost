@@ -599,6 +599,8 @@ class _Core:
 def _core(df: pd.DataFrame, b: EstimateBasis) -> _Core:
     warnings: list[str] = []
     notes: list[str] = []
+    if b.purpose not in F.PURPOSES:
+        raise ValueError(f"Unknown purpose '{b.purpose}'. Choose one of: {', '.join(F.PURPOSES)}.")
     if b.train_size_mtpa <= 0 or b.trains < 1:
         raise ValueError("Train size must be above zero and trains at least one.")
     if not -1.0 < b.class_low <= 0.0 <= b.class_high:
@@ -846,6 +848,10 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         warnings.insert(0, "Preview: the guideline does not yet cover this facility type "
                            "(Section 18). Liquefaction-only factors are switched off.")
     sel = core.sel
+    if b.estimate_date is None:
+        warnings.insert(0, "No estimate date given, so the latest published OPCI quarter "
+                           f"({opci_link.show_period(b.resolved_estimate_date())}) is used. Set the estimate "
+                           "date, usually the expected FID date.")
     fid_warn = fid_window_warning(df, b, core.pool)
     if fid_warn:
         warnings.append(fid_warn)
