@@ -100,3 +100,10 @@ def test_package_setup_matches_requirements():
     assert sorted(project["dependencies"]) == sorted(runtime)
     assert not any(x.startswith("pytest") for x in runtime)  # the test runner is a development need
     assert project["optional-dependencies"]["dev"] == [x for x in lines("requirements-dev.txt")]
+
+
+def test_decisions_are_credited_to_the_author():
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "docs" / "GUIDELINE.md").read_text(encoding="utf-8")
+    assert "approved by the author (Syed Zia Haider)" in text
+    assert "approved by the owner" not in text.lower() and "the owner agreed" not in text.lower()

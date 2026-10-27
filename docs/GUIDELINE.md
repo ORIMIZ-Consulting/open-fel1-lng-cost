@@ -8,7 +8,7 @@ Version 0.2, 24 October 2026. Author: Syed Zia Haider, ORIMIZ Consulting. Draft 
 
 ## Decisions behind version 0.2
 
-The owner agreed these decisions on 24 October 2026.
+These decisions were approved by the author (Syed Zia Haider) on 24 October 2026.
 
 | # | Decision |
 | --- | --- |
