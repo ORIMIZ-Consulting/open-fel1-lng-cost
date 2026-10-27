@@ -62,6 +62,22 @@ def test_filters_record_a_reason(tmp_path):
     assert notes["a5"] == ""  # integrated, but a plant split exists
 
 
+def test_fid_window_counts_back_from_latest_opci_quarter(tmp_path):
+    latest = int(opci_link.latest_quarter()[:4])
+    start = latest - 15
+    df = analogs(tmp_path, {}, {"fid_year": start, "cost_year": start}, {"fid_year": start - 1, "cost_year": start - 1},
+                 {"fid_year": start - 2, "cost_year": start - 2})
+    res = estimate(df, basis(estimate_date="2029Q4"))  # a later estimate date does not move the window
+    notes = dict(zip(res.pool["id"], res.pool["selection_note"]))
+    assert notes["a2"] == ""  # FID exactly at the start of the window stays in
+    assert notes["a3"] == f"FID before {start}" and notes["a4"] == f"FID before {start}"
+    warn = [w for w in res.warnings if w.startswith("The FID window")]
+    assert len(warn) == 1 and "removes 2 analog(s)" in warn[0]
+    assert "With the window off, 4 analogs pass the filters instead of 2." in warn[0]
+    quiet = estimate(analogs(tmp_path, {}), basis())
+    assert not any(w.startswith("The FID window") for w in quiet.warnings)
+
+
 def test_cluster_rule_for_large_trains(tmp_path):
     df = analogs(tmp_path, {"capacity_mtpa": 7.0}, {"capacity_mtpa": 5.0})
     res = estimate(df, basis(train_size_mtpa=7.5))

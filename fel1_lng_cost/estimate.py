@@ -217,8 +217,8 @@ def select_analogs(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
             why = "Excluded by user"
         elif r["scope"] not in b.scopes and not (b.use_plant_splits and has_split):
             why = f"Scope '{r['scope']}' not accepted and no plant-only split"
-        elif b.fid_window_years is not None and r["fid_year"] < b.estimate_year - b.fid_window_years:
-            why = f"FID before {b.estimate_year - b.fid_window_years}"
+        elif b.fid_window_years is not None and r["fid_year"] < fid_window_start(b):
+            why = f"FID before {fid_window_start(b)}"
         elif b.train_band is not None and not (
             b.train_band[0] <= r["train_size_mtpa"] / t <= b.train_band[1]
         ):
@@ -237,6 +237,26 @@ def select_analogs(df: pd.DataFrame, b: EstimateBasis) -> pd.DataFrame:
     pool["selection_note"] = reasons
     pool["selected"] = pool["selection_note"] == ""
     return pool.reset_index(drop=True)
+
+
+def fid_window_start(b: EstimateBasis) -> int:
+    """First FID year inside the window. The window counts back from the latest
+    published OPCI quarter, not from the estimate date."""
+    return int(opci_link.latest_quarter(b.opci_release)[:4]) - b.fid_window_years
+
+
+def fid_window_warning(df: pd.DataFrame, b: EstimateBasis, pool: pd.DataFrame) -> str | None:
+    """Warn when the FID window removes analogs, with the count with the window off."""
+    if b.fid_window_years is None:
+        return None
+    removed = int(pool["selection_note"].str.startswith("FID before").sum())
+    if not removed:
+        return None
+    without = int(select_analogs(df, b.with_changes(fid_window_years=None))["selected"].sum())
+    latest = opci_link.show_period(opci_link.latest_quarter(b.opci_release))
+    return (f"The FID window ({b.fid_window_years} years back from {latest}, the latest published OPCI "
+            f"quarter) removes {removed} analog(s). With the window off, {without} analogs pass the "
+            f"filters instead of {int(pool['selected'].sum())}.")
 
 
 # ================================================================ Steps 4 to 7
@@ -826,6 +846,9 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         warnings.insert(0, "Preview: the guideline does not yet cover this facility type "
                            "(Section 18). Liquefaction-only factors are switched off.")
     sel = core.sel
+    fid_warn = fid_window_warning(df, b, core.pool)
+    if fid_warn:
+        warnings.append(fid_warn)
 
     # Warnings that look at inputs and the analog set
     small, large = F.SIZE_CLUSTERS

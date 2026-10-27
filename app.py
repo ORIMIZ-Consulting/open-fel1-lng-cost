@@ -100,7 +100,8 @@ with tab_sw:
         band = st.slider("Train size band (times target)", 0.2, 5.0, D.train_band or (0.5, 2.0), 0.1,
                          key=f"band{k}") if use_band else None
         use_fid = st.checkbox("Filter on FID date", D.fid_window_years is not None, key=f"fid_on{k}")
-        fid_window = st.number_input("FID within (years)", 1, 40, D.fid_window_years or 15,
+        fid_window = st.number_input("FID within (years) of the latest published OPCI quarter", 1, 40,
+                                     D.fid_window_years or 15,
                                      key=f"fid{k}") if use_fid else None
         scopes = st.multiselect("Scopes accepted", list(F.SCOPES), default=list(D.scopes),
                                 format_func=F.SCOPES.get, key=f"scopes{k}")
