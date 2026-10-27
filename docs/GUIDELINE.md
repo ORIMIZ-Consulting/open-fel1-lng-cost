@@ -143,7 +143,7 @@ Each filter can be tightened, loosened or switched off.
 | B. User index (override) | User loads index values; they replace OPCI | Private CEPCI subscription; S&P Global UCCI or DCCI; Nelson-Farrar | Licensed data stays on the user's machine; never published |
 | C. Constant rate | (1 + r) ^ (years) | User sets r | Sensitivity only |
 
-**Data release.** The tool uses the latest OPCI data release by default and stamps the OPCI version and data release on every result, for example "OPCI 1.0.0, data-2026-09". A freeze switch fixes a named release, so an old estimate can be reproduced exactly.
+**Data release.** The tool uses the latest OPCI data release by default and stamps the OPCI version and data release on every result, for example "OPCI 1.1.0, data-2026-09". A freeze switch fixes a named release, so an old estimate can be reproduced exactly.
 
 **Escalation band.** The factor carries a band from OPCI's back-test against public CEPCI: about ±5.5% for normal years and about ±9% when the analog's cost date falls in 2021 or 2022 (supply-shock years). The tool reads these limits from OPCI. The band enters the range as a named uncertainty (Step 12).
 
@@ -407,7 +407,7 @@ The 13 steps stay the same. The FLNG module changes:
 
 **Cost indices**
 
-- Haider, S. Z. (2026). Open Plant Cost Index (OPCI), version 1.0.0. ORIMIZ Consulting. DOI 10.5281/zenodo.23615226. https://github.com/ORIMIZ-Consulting/open-plant-cost-index
+- Haider, S. Z. (2026). Open Plant Cost Index (OPCI), version 1.1.0. ORIMIZ Consulting. DOI 10.5281/zenodo.23615226. https://github.com/ORIMIZ-Consulting/open-plant-cost-index
 - US Bureau of Labor Statistics, Producer Price Index and Current Employment Statistics, via FRED, Federal Reserve Bank of St. Louis. https://fred.stlouisfed.org
 - International Monetary Fund, World Economic Outlook (inflation forecasts for projections).
 - Chemical Engineering Plant Cost Index (CEPCI), Chemical Engineering magazine. https://www.chemengonline.com/pci (used by OPCI for validation only; private override in this tool)

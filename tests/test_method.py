@@ -617,6 +617,19 @@ def test_guideline_labels_are_v02():
     assert F.GUIDE.endswith("v0.2")
 
 
+def test_versions_on_every_result(tmp_path):
+    import fel1_lng_cost
+
+    res = estimate(analogs(tmp_path, {}), basis())
+    log = res.log.set_index("switch")
+    assert log.loc["Tool version", "setting"] == f"open-fel1-lng-cost {fel1_lng_cost.__version__}"
+    assert log.loc["Guideline version", "setting"] == F.GUIDE
+    line = [x for x in res.summary().splitlines() if "Versions:" in x][0]
+    for part in (fel1_lng_cost.__version__, "Guideline v0.2", opci.__version__, opci_link.latest_release(),
+                 opci_link.location_version()):
+        assert part in line
+
+
 def test_preview_types_switch_off_liquefaction_factors():
     df = load_analogs()
     res = estimate(df, make_basis("flng", train_size_mtpa=2.5, site_type="conversion"))

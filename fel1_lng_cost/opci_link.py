@@ -1,7 +1,7 @@
 """Link to the Open Plant Cost Index (OPCI), the source of escalation and location.
 
 Guideline v0.2, Step 4: every result carries the OPCI version and data release,
-for example "OPCI 1.0.0, data-2026-09". The latest data release is used by
+for example "OPCI 1.1.0, data-2026-09". The latest data release is used by
 default; the freeze switch names a release so an old estimate can be
 reproduced exactly. The escalation band and the supply-shock note are read
 from OPCI, not written into this tool.

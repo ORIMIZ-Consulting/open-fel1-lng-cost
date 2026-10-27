@@ -159,6 +159,15 @@ def escalation_cases(b: EstimateBasis) -> tuple[list[tuple[str, str]], list[str]
     raise ValueError(f"Unknown escalation mode '{mode}'")
 
 
+def versions_label(b: EstimateBasis) -> str:
+    """Every version a result depends on, in one line."""
+    from . import __version__ as tool_version
+    s = opci_link.stamp(b.opci_release)
+    return (f"open-fel1-lng-cost {tool_version}; Guideline v{F.GUIDE_VERSION}; OPCI {s['version']}; "
+            f"data release {s['data_release']}{' (frozen)' if s['frozen'] else ''}; "
+            f"OPCI location table {opci_link.location_version()}")
+
+
 def escalation_source(b: EstimateBasis) -> str:
     """Plain label for the index behind this result, for the outputs."""
     how = escalation_cases(b)[0][0][1]
@@ -834,6 +843,7 @@ class EstimateResult:
             f"  {self.stats['count']} analogs, n = {self.exponent:.2f}, base method: {self.base_method}",
             "  AACE Class 5. Reasoned bounds, not a statistical P10 and P90.",
             f"  Range: {self.range_parts.get('note', '')}",
+            f"  Versions: {versions_label(b)}",
         ]
         lines += [f"  {x}" for x in self.escalation.get("lines", []) + self.location.get("lines", [])]
         lines += [f"  Note: {w}" for w in self.warnings]
@@ -1032,7 +1042,14 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
     # Decision log and references
     log = pd.DataFrame(decision_log(b))
     stamp = opci_link.stamp(b.opci_release)
+    from . import __version__ as tool_version
     log = pd.concat([log, pd.DataFrame([
+        {"step": 13, "switch": "Tool version", "setting": f"open-fel1-lng-cost {tool_version}",
+         "default": "Installed version", "changed": False, "source_of_default": "This tool",
+         "reason": "Recorded with every result", "date": b.log_date},
+        {"step": 13, "switch": "Guideline version", "setting": F.GUIDE, "default": F.GUIDE,
+         "changed": False, "source_of_default": "docs/GUIDELINE.md", "reason": "Recorded with every result",
+         "date": b.log_date},
         {"step": 4, "switch": "OPCI version", "setting": stamp["version"], "default": "Installed version",
          "changed": False, "source_of_default": F.OPCI, "reason": "Recorded with every result", "date": b.log_date},
         {"step": 4, "switch": "OPCI data release used", "setting": stamp["data_release"],

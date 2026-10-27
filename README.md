@@ -122,6 +122,20 @@ By default the tool escalates with OPCI, which installs with the tool. The Chemi
 | `requirements.txt` | Libraries to install. It reads `requirements/opci.txt` for OPCI |
 | `requirements-dev.txt` | The same plus the test runner (pytest) |
 
+## Versions on your result
+
+Every result, the Excel Summary sheet and the decision log carry five versions. Quote them when you share a number, so anyone can reproduce it.
+
+| Version | What it tells you | Example |
+|---|---|---|
+| Tool version | The release of this tool's code | open-fel1-lng-cost 0.2.0 |
+| Guideline version | The estimating method the code follows (`docs/GUIDELINE.md`) | Guideline v0.2 |
+| OPCI version | The Open Plant Cost Index code that gives escalation and location | OPCI 1.1.0 |
+| Data release | The monthly OPCI data set, named by its last month of data. Freeze it to reproduce an old estimate exactly | data-2026-09 |
+| Location table version | The OPCI table of location factors, ranges and sources | OPCI location table 0.2.0 |
+
+A new data release can move escalation factors. A new location table can move location factors. Both are recorded, so a change in a result can be traced to its cause.
+
 ## Known limits
 
 These come from the guideline (Section 19), plus a few of the tool's own.

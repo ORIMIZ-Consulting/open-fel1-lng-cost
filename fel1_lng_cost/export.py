@@ -11,7 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import factors as F
-from .estimate import EstimateResult, escalation_source
+from .estimate import EstimateResult, escalation_source, versions_label
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3A5F")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -98,6 +98,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         ("Estimate date", b.resolved_estimate_date().replace("Q", " Q")),
         ("Currency", b.report_currency),
         ("Cost index", escalation_source(b)),
+        ("Versions", versions_label(b)),
         (None, None),
         (f"Low ({b.report_currency} million)", round(r.low * fx)),
         (f"Base ({b.report_currency} million)", round(r.central * fx)),

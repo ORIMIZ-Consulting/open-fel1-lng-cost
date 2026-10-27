@@ -2,6 +2,8 @@
 
 Implements the FEL 1 LNG Capital Cost Estimating Guideline v0.2 (docs/GUIDELINE.md).
 """
+__version__ = "0.2.0"  # tool version; also read by pyproject.toml
+
 from . import factors
 from .analogs import check_analogs, load_analogs
 from .basis import BrownfieldShares, EstimateBasis, Method, SiteItem, decision_log, make_basis
