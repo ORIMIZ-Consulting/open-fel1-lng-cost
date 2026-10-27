@@ -811,6 +811,7 @@ class EstimateResult:
             f"  High  {self.in_report_currency(self.high):>10,.0f}",
             f"  {self.stats['count']} analogs, n = {self.exponent:.2f}, base method: {self.base_method}",
             "  AACE Class 5. Reasoned bounds, not a statistical P10 and P90.",
+            f"  Range: {self.range_parts.get('note', '')}",
         ]
         lines += [f"  {x}" for x in self.escalation.get("lines", []) + self.location.get("lines", [])]
         lines += [f"  Note: {w}" for w in self.warnings]
@@ -901,18 +902,24 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         low, high = built_low, built_high
     mvals = [m.value for m in methods]
     low, high = min(low, min(mvals)), max(high, max(mvals))
-    tol = F.CLASS_BAND_TOLERANCE
-    narrower = low / central - 1 > b.class_low + tol or high / central - 1 < b.class_high - tol
-    if b.range_method != "class_band" and narrower:
-        if b.widen_to_class_band:
-            low, high = min(low, band_low), max(high, band_high)
-            warnings.append("Range widened to the Class 5 band.")
+    # D6: report the wider of the named-uncertainty range and the class band, and show both.
+    named = f"{low / central - 1:+.0%} / {high / central - 1:+.0%}"
+    if b.range_method == "class_band":
+        range_note = f"Class band range ({b.class_low:+.0%} / {b.class_high:+.0%})."
+    elif not b.class_band_floor:
+        range_note = (f"Named uncertainties alone: {named}. Class band ({b.class_low:+.0%} / "
+                      f"{b.class_high:+.0%}) switched off by the user.")
+        if not (b.reasons.get("class_band_floor") or b.reasons.get("step:12")):
+            warnings.append("The class band is switched off: record the reason in the decision log (Step 12).")
+    else:
+        ends = [name for name, applied in (("low", band_low < low), ("high", band_high > high)) if applied]
+        low, high = min(low, band_low), max(high, band_high)
+        if len(ends) == 2:
+            range_note = f"Class band applied; named uncertainties alone give {named}."
+        elif ends:
+            range_note = f"Class band applied at the {ends[0]} end; named uncertainties alone give {named}."
         else:
-            warnings.append(
-                f"The range ({low / central - 1:+.0%} / {high / central - 1:+.0%}) is narrower than the "
-                f"class band ({b.class_low:+.0%} / {b.class_high:+.0%}). Widen it, or record why this "
-                "project is better defined than a typical Class 5."
-            )
+            range_note = f"Named uncertainties give {named}, wider than the class band."
     range_parts = {"low_case": low_case, "high_case": high_case}
     for u in uncertainties:
         range_parts[f"{u['key']}_low"] = u["low"]
@@ -922,6 +929,7 @@ def estimate(df: pd.DataFrame, b: EstimateBasis) -> EstimateResult:
         "site_opportunities": opp, "site_risks": risk,
         "class_band_low": band_low, "class_band_high": band_high,
         "built_low": built_low, "built_high": built_high, "method": b.range_method,
+        "note": range_note,
     })
 
     # Step 11: blocks for the final base

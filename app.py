@@ -221,7 +221,9 @@ with tab_sw:
         g_hi = c2.number_input("Definition growth high %", 0, 60, 15, 1, key=f"gh{k}") / 100
         cont = c3.number_input("Contingency % (non-budget share)", 0, 50, int(D.contingency_rate * 100), 1,
                                key=f"ct{k}") / 100
-        widen = st.checkbox("Widen to the class band when the built range is narrower", False, key=f"wd{k}")
+        floor = st.checkbox("Report the wider of the named range and the class band (D6)", True, key=f"wd{k}",
+                            help="Untick to report the named-uncertainty range alone. Give the reason "
+                                 "below; it goes into the decision log.")
         r = reason_box(12, f"r12{k}")
         if r:
             reasons["step:12"] = r
@@ -365,7 +367,7 @@ common = dict(
     extrapolation_limit=float(extrap), multi_train_method=mt_method, repeat_train_factor=float(repeat),
     weighting=weighting, outlier_threshold=float(outlier), materiality=float(materiality),
     range_method=rmethod, definition_growth=(float(g_lo), float(g_hi)), contingency_rate=float(cont),
-    widen_to_class_band=widen,
+    class_band_floor=floor,
 )
 basis = make_basis(ftype, **common, site_items=site_items, methods=methods,
                    analog_method_judgment_calls=int(analog_calls), base_rule=rule,
@@ -460,7 +462,7 @@ with tab_res:
     m2.metric("Base", f"{res.central * fxv:,.0f} {cur} m")
     m3.metric("High", f"{res.high * fxv:,.0f} {cur} m", f"{res.high / res.central - 1:+.0%}", delta_color="off")
     m4.metric("Unit cost", f"{res.unit_cost:,.0f} USD/tpa")
-    st.caption(f"AACE Class 5. Base method: {res.base_method}. {res.base_reason} "
+    st.caption(f"{res.range_parts['note']} AACE Class 5. Base method: {res.base_method}. {res.base_reason} "
                "The range is a set of reasoned bounds, not a statistical P10 and P90.")
     for line in res.escalation.get("lines", []) + res.location.get("lines", []):
         st.caption(line)

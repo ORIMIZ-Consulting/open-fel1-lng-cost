@@ -104,6 +104,7 @@ def build_workbook(r: EstimateResult, comparison: dict | None = None) -> Workboo
         (f"High ({b.report_currency} million)", round(r.high * fx)),
         ("Base unit cost (USD per tpa)", round(r.unit_cost)),
         ("Range vs base", f"{r.low / r.central - 1:+.0%} / {r.high / r.central - 1:+.0%}"),
+        ("Range basis", r.range_parts.get("note", "")),
         ("Class", "AACE Class 5"),
         ("Accuracy target", f"{b.class_low:+.0%} / {b.class_high:+.0%}"),
         ("Base method", f"{r.base_method}: {r.base_reason}"),

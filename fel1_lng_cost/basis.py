@@ -157,7 +157,7 @@ class EstimateBasis:
     range_method: str = "built"  # built | class_band | analog_spread
     definition_growth: tuple[float, float] = F.DEFINITION_GROWTH
     contingency_rate: float = F.CONTINGENCY_RATE
-    widen_to_class_band: bool = False
+    class_band_floor: bool = True  # D6: report at least the class band; False = named range alone
 
     # ------------------------------------------------ audit trail
     option_name: str = "Option A"
@@ -305,7 +305,8 @@ SWITCHES = [
     ("range_method", 12, "Range method", "Built from named uncertainties"),
     ("definition_growth", 12, "Definition growth", F.GUIDE),
     ("contingency_rate", 12, "Contingency rate for the non-budget share", F.JUDGMENT),
-    ("widen_to_class_band", 12, "Widen range to the class band", "No; warn instead"),
+    ("class_band_floor", 12, "Report the wider of the named range and the class band",
+     "Yes (decision D6); switching it off needs a reason"),
 ]
 
 

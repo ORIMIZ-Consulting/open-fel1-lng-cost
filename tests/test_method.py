@@ -438,7 +438,8 @@ def test_storage_and_marine_split_one_third_tank(tmp_path):
 # ------------------------------------------------------------- Step 12
 def test_built_range_is_root_sum_of_squares(tmp_path):
     df = analogs(tmp_path, {}, {"cost_amount_million": 5500})
-    res = estimate(df, basis(definition_growth=(0.0, 0.15), weighting="equal", location_code="ID-KAL"))
+    res = estimate(df, basis(definition_growth=(0.0, 0.15), weighting="equal", location_code="ID-KAL",
+                             class_band_floor=False, reasons={"class_band_floor": "test"}))
     p = res.range_parts
     band = opci_link.band()["normal"]
     loc = opci.location(to="ID-KAL")
@@ -452,7 +453,7 @@ def test_built_range_is_root_sum_of_squares(tmp_path):
     assert res.high == pytest.approx(res.central * (1 + math.sqrt(sum(x * x for x in highs))))
     # the target location range enters once; analog location ranges do not
     assert [k for k in p if "location" in k] == ["target_location_low", "target_location_high"]
-    wide = estimate(df, basis(widen_to_class_band=True, weighting="equal"))
+    wide = estimate(df, basis(weighting="equal"))  # D6 default: class band applied
     assert wide.low == pytest.approx(wide.central * 0.7) and wide.high == pytest.approx(wide.central * 1.5)
 
 
@@ -471,18 +472,34 @@ def test_single_analog_uses_default_spread(tmp_path):
     assert res.range_parts["analog_spread_high"] == F.DEFAULT_ANALOG_SPREAD[1]
 
 
-def test_class_band_warning_tolerance(tmp_path):
+def test_d6_reports_the_wider_of_named_range_and_class_band(tmp_path):
     df = analogs(tmp_path, {})
-    first = estimate(df, basis(definition_growth=(0.0, 0.15)))
-    lo, hi = first.low / first.central - 1, first.high / first.central - 1
+    named = estimate(df, basis(definition_growth=(0.0, 0.15), class_band_floor=False))
+    lo, hi = named.low / named.central - 1, named.high / named.central - 1
+    assert lo > -0.30 and hi < 0.50  # named range alone is narrower here
+    res = estimate(df, basis(definition_growth=(0.0, 0.15)))
+    assert res.low == pytest.approx(res.central * 0.7) and res.high == pytest.approx(res.central * 1.5)
+    assert res.range_parts["note"] == f"Class band applied; named uncertainties alone give {lo:+.0%} / {hi:+.0%}."
+    assert not any("narrower than the class band" in w for w in res.warnings)  # the old warning is gone
+    one_end = estimate(df, basis(definition_growth=(0.0, 0.15), class_low=lo - 0.05, class_high=hi - 0.05))
+    assert one_end.range_parts["note"].startswith("Class band applied at the low end")
+    assert one_end.high == pytest.approx(named.high)
+    wider = estimate(df, basis(definition_growth=(0.0, 0.15), class_low=-0.05, class_high=0.05))
+    assert wider.low == pytest.approx(named.low) and wider.high == pytest.approx(named.high)
+    assert "wider than the class band" in wider.range_parts["note"]
 
-    def warned(class_low, class_high):
-        r = estimate(df, basis(definition_growth=(0.0, 0.15), class_low=class_low, class_high=class_high))
-        return any("narrower than the class band" in w for w in r.warnings)
 
-    assert not warned(lo - 0.015, hi + 0.015)  # within 2 points at both ends
-    assert warned(lo - 0.025, hi)  # low end more than 2 points narrower
-    assert warned(lo, hi + 0.025)  # high end more than 2 points narrower
+def test_switching_off_the_class_band_needs_a_reason(tmp_path):
+    df = analogs(tmp_path, {})
+    off = estimate(df, basis(class_band_floor=False))
+    assert any("record the reason" in w for w in off.warnings)
+    assert "switched off by the user" in off.range_parts["note"]
+    log = off.log.set_index("switch")
+    assert log.loc["Report the wider of the named range and the class band", "changed"]
+    why = estimate(df, basis(class_band_floor=False, reasons={"class_band_floor": "Scope well defined"}))
+    assert not any("record the reason" in w for w in why.warnings)
+    assert why.log.set_index("switch").loc["Report the wider of the named range and the class band",
+                                           "reason"] == "Scope well defined"
 
 
 def test_contingency_only_for_missing_share(tmp_path):
