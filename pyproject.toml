@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-fel1-lng-cost"
+version = "0.2.0"
+description = "Concept-stage (AACE Class 5) capital cost estimates for LNG plants from public analog projects."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Syed Zia Haider", email = "ziafarah1@gmail.com" }]
+requires-python = ">=3.10"
+# Keep in step with requirements.txt and requirements/opci.txt.
+dependencies = [
+    "pandas>=2.1",
+    "numpy>=1.24",
+    "openpyxl>=3.1.5",
+    "streamlit>=1.66.1",
+    "plotly>=5.20",
+    "opci>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+Repository = "https://github.com/ORIMIZ-Consulting/open-fel1-lng-cost"
+
+[tool.setuptools]
+packages = ["fel1_lng_cost", "fel1_lng_cost.data"]
+
+[tool.setuptools.package-dir]
+# The public analog data and templates ship inside the package as fel1_lng_cost/data.
+"fel1_lng_cost.data" = "data"
+
+[tool.setuptools.package-data]
+"fel1_lng_cost.data" = ["*.csv"]
+
+[tool.setuptools.exclude-package-data]
+"fel1_lng_cost.data" = ["private_*", "*.private.csv"]

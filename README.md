@@ -21,14 +21,22 @@ The tool follows the [FEL 1 LNG Capital Cost Estimating Guideline v0.2](docs/GUI
 
 You need Python 3.10 or newer.
 
+A virtual environment keeps the tool's libraries apart from your other Python work. Make one first:
+
 ```bash
 git clone https://github.com/ORIMIZ-Consulting/open-fel1-lng-cost.git
 cd open-fel1-lng-cost
-pip install -r requirements.txt
+python -m venv .venv
+```
+
+Turn it on with `source .venv/bin/activate` (macOS and Linux) or `.venv\Scripts\activate` (Windows). Then install the tool and start the app:
+
+```bash
+pip install .
 streamlit run app.py
 ```
 
-Your browser opens the app.
+Your browser opens the app. To change the code and run the tests, install it with `pip install -e ".[dev]"` (or `pip install -r requirements-dev.txt`) and run `pytest`.
 
 1. Fill in **Step 1** in the sidebar: purpose, train size, number of trains, site type, location and the estimate date (required; usually the expected FID date).
 2. Read the **Result** tab.
@@ -110,7 +118,9 @@ By default the tool escalates with OPCI, which installs with the tool. The Chemi
 | `docs/GUIDELINE.md` | The estimating guideline (version 0.2) |
 | `examples/example_estimate.py` | Greenfield against brownfield, in Python |
 | `tests/` | Automatic checks. Run `pytest` |
+| `pyproject.toml` | Package setup, so `pip install .` works |
 | `requirements.txt` | Libraries to install. It reads `requirements/opci.txt` for OPCI |
+| `requirements-dev.txt` | The same plus the test runner (pytest) |
 
 ## Known limits
 

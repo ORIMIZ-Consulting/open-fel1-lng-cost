@@ -19,7 +19,9 @@ import pandas as pd
 from . import factors as F
 from . import opci_link
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+# From a clone, the repository's data/ folder; from pip install, the copy inside the package.
+_REPO_DATA = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = _REPO_DATA if (_REPO_DATA / "public_analogs.csv").exists() else Path(__file__).resolve().parent / "data"
 PUBLIC_FILE = DATA_DIR / "public_analogs.csv"
 
 REQUIRED_COLUMNS = [

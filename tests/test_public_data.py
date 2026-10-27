@@ -84,3 +84,19 @@ def test_no_public_file_names_the_indonesian_site():
     assert files
     for p in files:
         assert "bon" + "tang" not in p.read_text(encoding="utf-8", errors="ignore").lower(), p
+
+
+def test_package_setup_matches_requirements():
+    tomllib = pytest.importorskip("tomllib")  # Python 3.11 and newer
+
+    root = Path(__file__).resolve().parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+
+    def lines(name):
+        return [x.strip() for x in (root / name).read_text(encoding="utf-8").splitlines()
+                if x.strip() and not x.startswith(("#", "-r"))]
+
+    runtime = lines("requirements.txt") + lines("requirements/opci.txt")
+    assert sorted(project["dependencies"]) == sorted(runtime)
+    assert not any(x.startswith("pytest") for x in runtime)  # the test runner is a development need
+    assert project["optional-dependencies"]["dev"] == [x for x in lines("requirements-dev.txt")]
