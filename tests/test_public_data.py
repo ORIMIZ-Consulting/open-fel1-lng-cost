@@ -107,3 +107,17 @@ def test_decisions_are_credited_to_the_author():
     text = (root / "docs" / "GUIDELINE.md").read_text(encoding="utf-8")
     assert "approved by the author (Syed Zia Haider)" in text
     assert "approved by the owner" not in text.lower() and "the owner agreed" not in text.lower()
+
+
+def test_dependabot_groups_libraries_monthly_and_opci_weekly():
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent
+    updates = yaml.safe_load((root / ".github" / "dependabot.yml").read_text(encoding="utf-8"))["updates"]
+    general = [u for u in updates if u["schedule"]["interval"] == "monthly"]
+    weekly = [u for u in updates if u["schedule"]["interval"] == "weekly"]
+    assert len(general) == 1 and len(weekly) == 1
+    assert {"dependency-name": "opci"} in general[0]["ignore"]  # opci is not in the monthly group
+    assert general[0]["groups"]["general-libraries"]["patterns"] == ["*"]
+    assert weekly[0]["allow"] == [{"dependency-name": "opci"}]
+    assert (root / weekly[0]["directory"].strip("/") / "opci.txt").exists()
